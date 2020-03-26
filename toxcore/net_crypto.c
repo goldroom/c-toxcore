@@ -493,17 +493,17 @@ static int handle_cookie_response(const Logger *log, uint8_t *cookie, uint64_t *
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie, const uint8_t *nonce,
                                    const uint8_t *session_pk, const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey)
 {
-	/* Handshake packet structure
-	 	[uint8_t 26]
-		[Cookie]
-		[nonce (24 bytes)]
-		[Encrypted message containing:
-    		[24 bytes base nonce]
-    		[session public key of the peer (32 bytes)]
-    		[sha512 hash of the entire Cookie sitting outside the encrypted part]
-    		[Other Cookie (used by the other to respond to the handshake packet)]
-		]
-	 */
+    /* Handshake packet structure
+        [uint8_t 26]
+        [Cookie]
+        [nonce (24 bytes)]
+        [Encrypted message containing:
+            [24 bytes base nonce]
+            [session public key of the peer (32 bytes)]
+            [sha512 hash of the entire Cookie sitting outside the encrypted part]
+            [Other Cookie (used by the other to respond to the handshake packet)]
+        ]
+     */
     uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
     memcpy(plain, nonce, CRYPTO_NONCE_SIZE);
     memcpy(plain + CRYPTO_NONCE_SIZE, session_pk, CRYPTO_PUBLIC_KEY_SIZE);
@@ -1697,7 +1697,7 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
     }
 
     switch (packet[0]) {
-    	// AKE: case to handle cookie response packets (Peer A/initiator)
+        // AKE: case to handle cookie response packets (Peer A/initiator)
         case NET_PACKET_COOKIE_RESPONSE: {
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING) {
                 return -1;
@@ -1726,7 +1726,7 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
 
         // AKE: case to handle handshake packets (Peer B/receiver)
         case NET_PACKET_CRYPTO_HS: {
-        	// AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
+            // AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
                     && conn->status != CRYPTO_CONN_HANDSHAKE_SENT
                     && conn->status != CRYPTO_CONN_NOT_CONFIRMED) {
@@ -1743,8 +1743,9 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
             }
 
             if (public_key_cmp(dht_public_key, conn->dht_public_key) == 0) {
-            	// Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
+                // Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
                 encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
+
                 /*
                  * AKE: This seems to be an (error/not perfect handshake) case of Peer A
                  * i.e. if Peer A receives handshake packet from Peer B, but has already sent a cookie request to Peer B himself
@@ -1990,10 +1991,10 @@ void new_connection_handler(Net_Crypto *c, new_connection_cb *new_connection_cal
 static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const uint8_t *data, uint16_t length,
         void *userdata)
 {
-	/*
-	 * TODO AKE: This function seems to be called if Peer B/receiver doesn't have a Crypto_Connection
-	 * conn yet (with the peer it received the handshake packet from)!
-	 */
+    /*
+     * TODO AKE: This function seems to be called if Peer B/receiver doesn't have a Crypto_Connection
+     * conn yet (with the peer it received the handshake packet from)!
+     */
     New_Connection n_c;
     n_c.cookie = (uint8_t *)malloc(COOKIE_LENGTH);
 
