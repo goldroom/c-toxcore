@@ -67,6 +67,7 @@ typedef struct Crypto_Connection {
     uint8_t sessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* Our public key for this session. */
     uint8_t sessionsecret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private key for this session. */
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The session public key of the peer. */
+    // TODO AKE: This shared_key should be hashed (HKDF)
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. */
     Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
@@ -514,6 +515,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
     memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
 
     // AKE: This is to create the OTHER cookie from Peer A/initiator
+    // AKE: Also Peer B sends a cookie again in the handshake packet
     if (create_cookie(c->log, c->mono_time, plain + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE,
                       cookie_plain, c->secret_symmetric_key) != 0) {
         return -1;
@@ -1743,7 +1745,8 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
             }
 
             if (public_key_cmp(dht_public_key, conn->dht_public_key) == 0) {
-                // Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
+                // AKE: Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
+            	// TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
                 encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
 
                 /*
@@ -2034,6 +2037,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
             memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
             // AKE: Peer B/receiver calculates shared session key from Peer A/initiator public key and self session secret key
             // AKE: Where is conn->sessionsecret_key coming from? => conn already existed -> there it is saved! Keys are generated in new_net_crypto()!
+            // TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
             encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
 
             crypto_connection_add_source(c, crypt_connection_id, source);
@@ -2064,6 +2068,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
  * return -1 on failure.
  * return connection id on success.
  */
+// TODO AKE: This function needs to be called by Peer B/receiver, otherwise he cannot calculate his ephemeral keypair! (only if he also starts a handshake)
 int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 {
     if (getcryptconnection_id(c, n_c->public_key) != -1) {
@@ -2098,11 +2103,13 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
     memcpy(conn->recv_nonce, n_c->recv_nonce, CRYPTO_NONCE_SIZE);
     // AKE: the peer's session pk is copied into the crypto connection from new connection
     memcpy(conn->peersessionpublic_key, n_c->peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
+    // AKE: Nonce is set here, therefore call to handle_new_connection_handshake() only possible after call of this function!
     random_nonce(conn->sent_nonce);
     // AKE: Message 2: generate new session public/private keypair -> peer receiving the handshake packet
     crypto_new_keypair(conn->sessionpublic_key, conn->sessionsecret_key);
     // AKE: Session Key Derivation by using session secret key and peer's session public key
     // AKE: peers session pk (handshake receiving peer) -> it's coming from New_Connection n_c
+    // TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
     encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
     // AKE: CRYPTO_CONN_NOT_CONFIRMED = ACCEPTED state of connection (need to send handshake packet)
     conn->status = CRYPTO_CONN_NOT_CONFIRMED;
@@ -2163,6 +2170,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     conn->connection_number_tcp = connection_number_tcp;
     memcpy(conn->public_key, real_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+    // AKE: Nonce generation for handshake encrypted part
     random_nonce(conn->sent_nonce);
     // AKE: Peer A handshake initiator _session_ public/private key pair generation
     crypto_new_keypair(conn->sessionpublic_key, conn->sessionsecret_key);

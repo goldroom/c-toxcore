@@ -1114,6 +1114,7 @@ Messenger.c: new_messenger()
 ### accept_crypto_connection() handshake case (Message 2 / Peer B)
 
 TODO don't know when this gets called, coming somehow via new_friend_connections()
+**TODO This function needs to be called by Peer B/receiver in order to calculate a ephemeral session keypair**
 Is this the case if a peer (Peer B) doesn't have a crypto conn for Peer (A) yet? This also doesn't call handle_crypto_handshake() which is necessary in every case IIUC.
 
 ```
