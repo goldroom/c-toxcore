@@ -234,6 +234,7 @@ that friend. This means that the onion module will start looking for this
 friend and send that friend their DHT public key, and the TCP relays it is
 connected to, in case a connection is only possible with TCP.
 
+**Comment: Important!**
 Once the onion returns the DHT public key of the peer, the DHT public key is
 saved, added to the DHT friends list and a new `net_crypto` connection is
 created. Any TCP relays returned by the onion for this friend are passed to the
@@ -243,6 +244,7 @@ If the DHT establishes a direct UDP connection with the friend,
 `friend_connection` will pass the IP/port of the friend to `net_crypto` and
 also save it to be used to reconnect to the friend if they disconnect.
 
+**Comment: On DHT key change the net_crypto connection will be klled a new with correct DHT pk created!**
 If `net_crypto` finds that the friend has a different DHT public key, which can
 happen if the friend restarted their client, `net_crypto` will pass the new DHT
 public key to the onion module and will remove the DHT entry for the old DHT
@@ -286,6 +288,7 @@ For all other data packets, are passed by `friend_connection` up to the upper
 Messenger module. It also separates lossy and lossless packets from
 `net_crypto`.
 
+**Comment: Important!**
 **Friend connection takes care of establishing the connection to the friend and
 gives the upper messenger layer a simple interface to receive and send
 messages, add and remove friends and know if a friend is connected (online) or
@@ -657,7 +660,7 @@ The goal of this module is to provide an easy interface to a UDP socket and othe
 
 A peer starts/initiates a handshake by calling `create_cookie_request()`.
 
-=> new_crypto_connection() resp. create_cookie_request() gets called regularly via tox_iterate or via dht_pk_callback() or via dht_ip_callback() (see create_cookie_request() call hierarchy below).
+=> new_crypto_connection() resp. create_cookie_request() gets called regularly via tox_iterate() or via dht_pk_callback() (i.e. DHT public key of friend changes) or via dht_ip_callback() (i.e. IP/Port of friend changes) (see create_cookie_request() call hierarchy below).
 => Additionally it is called via DHT ip/pk callbacks.
 
 From tox.h: 

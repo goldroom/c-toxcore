@@ -2064,6 +2064,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 /* Accept a crypto connection.
  *
  * TODO AKE: Peer B/receiver handshake (message 2), don't know when this gets called
+ * TODO AKE: Why doesn't this function call handle_crypto_handshake()?
  *
  * return -1 on failure.
  * return connection id on success.
