@@ -29,8 +29,11 @@
 
 #include "net_crypto.h"
 
+#include <noise/protocol.h>
+
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "mono_time.h"
@@ -67,7 +70,7 @@ typedef struct Crypto_Connection {
     uint8_t sessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* Our public key for this session. */
     uint8_t sessionsecret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private key for this session. */
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The session public key of the peer. */
-    // TODO AKE: This shared_key should be hashed (HKDF)
+    // TODO AKE: This shared_key should be hashed (HKDF) => done automatically in Noise
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. */
     Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection (echoID!) */
@@ -218,6 +221,59 @@ static uint8_t crypt_connection_id_not_valid(const Net_Crypto *c, int crypt_conn
 #define COOKIE_REQUEST_PLAIN_LENGTH (uint16_t)(COOKIE_DATA_LENGTH + sizeof(uint64_t))
 #define COOKIE_REQUEST_LENGTH (uint16_t)(1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + COOKIE_REQUEST_PLAIN_LENGTH + CRYPTO_MAC_SIZE)
 #define COOKIE_RESPONSE_LENGTH (uint16_t)(1 + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + sizeof(uint64_t) + CRYPTO_MAC_SIZE)
+
+//AKE NEW: initialize_handshake()
+//AKE NEW TODO: Crypto_connection *conn und Net_crypto *c necessary as parameters
+//AKE NEW TODO: don't need *prologue and prologue_len (fixed in Tox)
+static int initialize_handshake
+(NoiseHandshakeState *handshake, const void *prologue, size_t prologue_len)
+{
+	NoiseDHState *dh;
+	uint8_t *key = 0;
+	size_t key_len = 0;
+	int err;
+
+	/* Set the prologue first */
+	// TODO set prologue CRYPTO_NOISE_PROTOCOL_NAME
+	err = noise_handshakestate_set_prologue(handshake, CRYPTO_NOISE_PROTOCOL_NAME, sizeof(CRYPTO_NOISE_PROTOCOL_NAME));
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("prologue", err);
+		return 0;
+	}
+
+	/* Set the local keypair for the client */
+	//TODO We don't need to call this function because we know we need a local keypair in KK
+	//TODO but we need to load it
+	dh = noise_handshakestate_get_local_keypair_dh(handshake);
+	key_len = noise_dhstate_get_private_key_length(dh);
+	// TODO key auf Net_crypto *c (muss vorhanden sein) setzen: c->self_secret_key
+	err = noise_dhstate_set_keypair_private(dh, key, key_len);
+	//noise_free(key, key_len);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("set client private key", err);
+		return 0;
+	} else {
+		fprintf(stderr, "Client private key required, but not provided.\n");
+		return 0;
+	}
+
+	dh = noise_handshakestate_get_remote_public_key_dh(handshake);
+	key_len = noise_dhstate_get_public_key_length(dh);
+	//key = (uint8_t*) malloc(key_len);
+	// TODO key auf Crypto_Connection *conn (muss vorhanden sein) setzen: conn->public_key
+	err = noise_dhstate_set_public_key(dh, key, key_len);
+	//noise_free(key, key_len);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("set server public key", err);
+		return 0;
+	} else {
+		fprintf(stderr, "Server public key required, but not provided.\n");
+		return 0;
+	}
+
+	/* Ready to go */
+	return 1;
+}
 
 /* Create a cookie request packet and put it in packet.
  * dht_public_key is the dht public key of the other
