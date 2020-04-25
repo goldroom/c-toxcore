@@ -244,7 +244,7 @@ If the DHT establishes a direct UDP connection with the friend,
 `friend_connection` will pass the IP/port of the friend to `net_crypto` and
 also save it to be used to reconnect to the friend if they disconnect.
 
-**Comment: On DHT key change the net_crypto connection will be klled a new with correct DHT pk created!**
+**Comment: On DHT key change the net_crypto connection will be klled a new one with the correct DHT public key created!**
 If `net_crypto` finds that the friend has a different DHT public key, which can
 happen if the friend restarted their client, `net_crypto` will pass the new DHT
 public key to the onion module and will remove the DHT entry for the old DHT
@@ -446,6 +446,7 @@ request to obtain one.
 
 The handshake packet is sent by both sides of the connection. If a peer receives a handshake it will check if the cookie is valid, if the encrypted section decrypts and validates, if the cookie hash is valid, if long term public key belongs to a known friend. If all these are true then the connection is considered 'Accepted' but not 'Confirmed'.
 
+TODO hier weiter
 If there is no existing connection to the peer identified by the long term
 public key to set to 'Accepted', one will be created with that status. If a
 connection to such peer with a not yet 'Accepted' status to exists, this
@@ -1116,7 +1117,11 @@ Messenger.c: new_messenger()
 
 ### accept_crypto_connection() handshake case (Message 2 / Peer B)
 
-TODO don't know when this gets called, coming somehow via new_friend_connections()
+~~don't know when this gets called, coming somehow via new_friend_connections()~~
+AKE: This is the related section in the spec:
+AKE: "If there is no existing connection to the peer identified by the long term
+AKE: public key to set to 'Accepted', one will be created with that status."
+But there is also another function for this?!
 **TODO This function needs to be called by Peer B/receiver in order to calculate a ephemeral session keypair**
 Is this the case if a peer (Peer B) doesn't have a crypto conn for Peer (A) yet? This also doesn't call handle_crypto_handshake() which is necessary in every case IIUC.
 

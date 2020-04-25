@@ -55,9 +55,9 @@ typedef enum Crypto_Conn_State {
     CRYPTO_CONN_NO_CONNECTION,       /* the connection is allocated, but not yet used */
     CRYPTO_CONN_COOKIE_REQUESTING,   /* we are sending cookie request packets */
     CRYPTO_CONN_HANDSHAKE_SENT,      /* we are sending handshake packets */
-    CRYPTO_CONN_NOT_CONFIRMED,       /* we are sending handshake packets;
+    CRYPTO_CONN_NOT_CONFIRMED,       /* we are sending handshake packets; // AKE: accepted
                                       * we have received one from the other, but no data */
-    CRYPTO_CONN_ESTABLISHED,         /* the connection is established */
+    CRYPTO_CONN_ESTABLISHED,         /* the connection is established */ // AKE: confirmed
 } Crypto_Conn_State;
 
 typedef struct Crypto_Connection {
@@ -70,7 +70,7 @@ typedef struct Crypto_Connection {
     // TODO AKE: This shared_key should be hashed (HKDF)
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. */
     Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
-    uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
+    uint64_t cookie_request_number; /* number used in the cookie request packets for this connection (echoID!) */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer */
 
     uint8_t *temp_packet; /* Where the cookie request/handshake packet is stored while it is being sent. */
@@ -268,9 +268,12 @@ static int create_cookie(const Logger *log, const Mono_Time *mono_time, uint8_t 
 {
     uint8_t contents[COOKIE_CONTENTS_LENGTH];
     const uint64_t temp_time = mono_time_get(mono_time);
+    // AKE:add the time to the Cookie content (will be encrypted)
     memcpy(contents, &temp_time, sizeof(temp_time));
+
     memcpy(contents + sizeof(temp_time), bytes, COOKIE_DATA_LENGTH);
     random_nonce(cookie);
+    // AKE: "cookie" is a the Nonce used to encrypt the cookie
     int len = encrypt_data_symmetric(encryption_key, cookie, contents, sizeof(contents), cookie + CRYPTO_NONCE_SIZE);
 
     if (len != COOKIE_LENGTH - CRYPTO_NONCE_SIZE) {
@@ -322,7 +325,9 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
                                   const uint8_t *shared_key, const uint8_t *dht_public_key)
 {
     uint8_t cookie_plain[COOKIE_DATA_LENGTH];
+    // AKE copy the initiators/Peer A static public key to the (plain) cookie data
     memcpy(cookie_plain, request_plain, CRYPTO_PUBLIC_KEY_SIZE);
+    // AKE copy the initiators/Peer A DHT public key to the (plain) cookie data
     memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
     uint8_t plain[COOKIE_LENGTH + sizeof(uint64_t)];
 
@@ -358,6 +363,7 @@ static int handle_cookie_request(const Net_Crypto *c, uint8_t *request_plain, ui
         return -1;
     }
 
+    // AKE: copy initiators/Peer A DHT public key from cookie request packet
     memcpy(dht_public_key, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
     // AKE: calculate shared key from DHT keys
     dht_get_shared_key_sent(c->dht, shared_key, dht_public_key);
@@ -1731,6 +1737,7 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
             // AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
                     && conn->status != CRYPTO_CONN_HANDSHAKE_SENT
+					// TODO AKE: why is this status also checked? If it's set after the if
                     && conn->status != CRYPTO_CONN_NOT_CONFIRMED) {
                 return -1;
             }
@@ -2063,7 +2070,10 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 
 /* Accept a crypto connection.
  *
- * TODO AKE: Peer B/receiver handshake (message 2), don't know when this gets called
+ * AKE: Peer B/receiver handshake (message 2)
+ * AKE: This is the related section in the spec:
+ * AKE: "If there is no existing connection to the peer identified by the long term
+ * AKE: public key to set to 'Accepted', one will be created with that status."
  * TODO AKE: Why doesn't this function call handle_crypto_handshake()?
  *
  * return -1 on failure.
@@ -2188,6 +2198,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     // AKE: Call: Create cookie request -> Initiator of handshake and send cookie request
     // AKE: Cookie request of initiator doesn't contain a cookie! Just to request one from peer!
+    // AKE: conn->cookie_request_number is the echoID in the cookie request packet!
     if (create_cookie_request(c, cookie_request, conn->dht_public_key, conn->cookie_request_number,
                               conn->shared_key) != sizeof(cookie_request)
             || new_temp_packet(c, crypt_connection_id, cookie_request, sizeof(cookie_request)) != 0) {
