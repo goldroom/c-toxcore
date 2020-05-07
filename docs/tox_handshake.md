@@ -446,7 +446,6 @@ request to obtain one.
 
 The handshake packet is sent by both sides of the connection. If a peer receives a handshake it will check if the cookie is valid, if the encrypted section decrypts and validates, if the cookie hash is valid, if long term public key belongs to a known friend. If all these are true then the connection is considered 'Accepted' but not 'Confirmed'.
 
-TODO hier weiter
 If there is no existing connection to the peer identified by the long term
 public key to set to 'Accepted', one will be created with that status. If a
 connection to such peer with a not yet 'Accepted' status to exists, this

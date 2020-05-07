@@ -317,11 +317,11 @@ static int open_cookie(const Logger *log, const Mono_Time *mono_time, uint8_t *b
 	uint64_t cookie_time;
 	memcpy(&cookie_time, contents, sizeof(cookie_time));
 	const uint64_t temp_time = mono_time_get(mono_time);
-
 	if (cookie_time + COOKIE_TIMEOUT < temp_time || temp_time < cookie_time) {
 		return -1;
 	}
 
+	// AKE: copy static public key and DHT public key to bytes[]
 	memcpy(bytes, contents + sizeof(cookie_time), COOKIE_DATA_LENGTH);
 	return 0;
 }
@@ -522,6 +522,7 @@ static int handle_cookie_response(const Logger *log, uint8_t *cookie, uint64_t *
  */
 // AKE: create a crypto handshake packet (both peers)
 //AKE NEW TODO: Adapt function for new handshake
+//AKE NEW: Should still work for the existing handshake
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie, const uint8_t *nonce,
 		const uint8_t *session_pk, const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey, NoiseHandshakeState *handshake)
 {
@@ -537,12 +538,14 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 	 ]
 	 [MAC 16 bytes]
 	 */
-	//AKE NEW: empty/not really needed in our case
+	//AKE NEW: "empty", but still needed in our case
 	NoiseBuffer noise_message;
-	//AKE NEW: +16 because I'm not sure if there is also the MAC included
-	uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + 16];
+	//AKE NEW: ephemeral public key + payload + I think also the MAC is included
+	uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
 	NoiseBuffer noise_payload;
+	// AKE NEW: Payload contains base nonce, sha512 hash of cookie, and other cookie
 	uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+	// AKE NEW: Add Nonce to payload
 	memcpy(noise_payload_buf, nonce, CRYPTO_NONCE_SIZE);
 	crypto_sha512(noise_payload_buf + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
 	uint8_t othercookie_plain[COOKIE_DATA_LENGTH ];
@@ -572,6 +575,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 	memcpy(packet + 1, cookie, COOKIE_LENGTH);
 	memcpy(packet + 1 + COOKIE_LENGTH, noise_message_buf, sizeof(noise_message_buf));
 
+	/*##################################################################################*/
 	//AKE NEW: OLD HANDSHAKE PACKET
 	//AKE NEW TODO: remove old stuff
 	/* Handshake packet structure
@@ -637,7 +641,8 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 // AKE: Peer B/receiver handle incoming handshake packet
 //AKE NEW TODO: Adapt function for Noise handshake
 static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t *session_pk, uint8_t *peer_real_pk,
-		uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk)
+		uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
+		NoiseHandshakeState *handshake)
 {
 	if (length != HANDSHAKE_PACKET_LENGTH) {
 		return -1;
@@ -647,6 +652,7 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t 
 
 	// AKE: COOKIES ARE ENCRYPTED WITH AN ADDITIONAL SECRET SYMMETRIC KEY WHICH IS ONLY KNOWN TO THE PEER HIMSELF!
 	// AKE: The peer opens his cookie to verify it's really from him!
+	// AKE: cookie_plain contains static public key and DHT public key of THIS peer
 	if (open_cookie(c->log, c->mono_time, cookie_plain, packet + 1, c->secret_symmetric_key) != 0) {
 		return -1;
 	}
@@ -658,7 +664,45 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t 
 	}
 
 	uint8_t cookie_hash[CRYPTO_SHA512_SIZE];
+	// AKE: calculating the hash of the cookie outside of the Noise payload
 	crypto_sha512(cookie_hash, packet + 1, COOKIE_LENGTH);
+	//AKE NEW: until here it should be the same
+	/*###############################################################################*/
+
+	//AKE NEW: "empty", but still needed in our case
+	NoiseBuffer noise_message;
+	//AKE NEW: ephemeral public key + payload + I think also the MAC is included
+	uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+	//AKE NEW: Copy the data from packet to the noise_message_buf
+	//AKE NEW TODO: old HANDSHAKE_PACKET_LENGTH is too big, therefore also subtracting CRYPTO_NONCE_SIZE => REMOVE!!
+	memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH - 1 - COOKIE_LENGTH - CRYPTO_NONCE_SIZE);
+	NoiseBuffer noise_payload;
+	// AKE NEW: Payload contains base nonce, sha512 hash of cookie, and other cookie
+	uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+	//Format the message payload into "payloadbuf".
+	noise_buffer_set_input(noise_payload, noise_payload_buf, sizeof(noise_payload_buf));
+	//Points to the message buffer to be populated with handshake details and the message payload.
+	noise_buffer_set_input(noise_message, noise_message_buf, sizeof(noise_message_buf));
+
+	int err = noise_handshakestate_read_message(handshake, &noise_message, &noise_payload);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("read handshake", err);
+		return -1;
+	}
+
+	//AKE NEW: copy nonce from the decrypted payload
+	memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
+	//AKE NEW: copy other cookie
+	memcpy(cookie, noise_payload.data + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
+
+	if (crypto_memcmp(cookie_hash, noise_payload.data + CRYPTO_NONCE_SIZE, CRYPTO_SHA512_SIZE) != 0) {
+		return -1;
+	}
+	//AKE NEW: memcpy peer_real_pk from cookie_plain + dht_public_key
+	memcpy(peer_real_pk, cookie_plain, CRYPTO_PUBLIC_KEY_SIZE);
+	memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
+	//AKE NEW: memcpy session_pk shouldn't be necessary
+	/*AKE NEW FINISHED####################################################################*/
 
 	// AKE: everything in plaintext that was encrypted in the handshake packet
 	uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
@@ -796,6 +840,7 @@ static int initialize_handshake
 //(NoiseHandshakeState *handshake, const Net_Crypto *c, int crypt_connection_id)
 (NoiseHandshakeState *handshake, uint8_t *self_secret_key, uint8_t *peer_public_key)
 {
+	printf("Calling initialize_handshake()");
 	//AKE NEW TODO: don't think this is necessary, just pass conn stuff diretly
 	//Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
@@ -809,7 +854,7 @@ static int initialize_handshake
 	err = noise_handshakestate_set_prologue(handshake, CRYPTO_NOISE_PROTOCOL_NAME, sizeof(CRYPTO_NOISE_PROTOCOL_NAME));
 	if (err != NOISE_ERROR_NONE) {
 		noise_perror("prologue", err);
-		return 0;
+		return -1;
 	}
 
 	/* Set the local keypair for the client */
@@ -822,10 +867,10 @@ static int initialize_handshake
 	//noise_free(key, key_len);
 	if (err != NOISE_ERROR_NONE) {
 		noise_perror("set client private key", err);
-		return 0;
+		return -1;
 	} else {
 		fprintf(stderr, "Client private key required, but not provided.\n");
-		return 0;
+		return -1;
 	}
 
 	dh = noise_handshakestate_get_remote_public_key_dh(handshake);
@@ -837,14 +882,14 @@ static int initialize_handshake
 	//noise_free(key, key_len);
 	if (err != NOISE_ERROR_NONE) {
 		noise_perror("set server public key", err);
-		return 0;
+		return -1;
 	} else {
 		fprintf(stderr, "Server public key required, but not provided.\n");
-		return 0;
+		return -1;
 	}
 
 	/* Ready to go */
-	return 1;
+	return 0;
 }
 
 /* Sends a packet to the peer using the fastest route.
@@ -1873,7 +1918,7 @@ bool udp, void *userdata)
 //			return -1;
 //		}
 //		//AKE NEW: initialize_handshake
-//		if (!initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key)) {
+//		if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
 //			noise_handshakestate_free(conn->handshake);
 //			return -1;
 //		}
@@ -1946,13 +1991,13 @@ bool udp, void *userdata)
 //		}
 //
 //		//AKE NEW: initialize_handshake
-//		if (!initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key)) {
+//		if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
 //			noise_handshakestate_free(conn->handshake);
 //			return -1;
 //		}
 
 		if (handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
-				packet, length, conn->public_key) != 0) {
+				packet, length, conn->public_key, conn->handshake) != 0) {
 			return -1;
 		}
 
@@ -2202,6 +2247,7 @@ void new_connection_handler(Net_Crypto *c, new_connection_cb *new_connection_cal
  * return 0 on success.
  */
 //AKE NEW TODO: adapt function for Noise handshake, not sure when this function is called, should be responder case
+//AKE NEW TODO: PROBLEM I don't know the peers public key to initialize a handshake in this case!
 static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const uint8_t *data, uint16_t length,
 		void *userdata)
 {
@@ -2220,9 +2266,33 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 	n_c.source = source;
 	n_c.cookie_length = COOKIE_LENGTH;
 
+	//AKE NEW TODO: add HandshakeState to New_Connection? Or a local variable here?
+	NoiseHandshakeState *handshake_temp;
+
+	//AKE NEW: IN THIS CASE THIS PEER IS DEFINATELY RESPONDER!
+	//AKE NEW: Noise init
+	if (noise_init() != NOISE_ERROR_NONE) {
+		fprintf(stderr, "Noise initialization failed\n");
+		return -1;
+	}
+
+	//AKE NEW: If I receive a handshake packet, I'm responder
+	int err = noise_handshakestate_new_by_name(&handshake_temp, CRYPTO_NOISE_PROTOCOL_NAME, NOISE_ROLE_RESPONDER);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror(CRYPTO_NOISE_PROTOCOL_NAME, err);
+		return -1;
+	}
+
+	//AKE NEW: initialize_handshake
+	//AKE NEW TODO: IMPORTANT n_c.publicy_key is empty/not defined here, but coming from handle_crypto_handshake()...
+	if (initialize_handshake(handshake_temp, c->self_secret_key, n_c.public_key) == -1) {
+		noise_handshakestate_free(handshake_temp);
+		return -1;
+	}
+
 	// AKE: Handle the crypto handshake packet from Peer A/initiator (incl. Other Cookie from A)
 	if (handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
-			n_c.cookie, data, length, nullptr) != 0) {
+			n_c.cookie, data, length, nullptr, handshake_temp) != 0) {
 		free(n_c.cookie);
 		return -1;
 	}
@@ -2244,8 +2314,24 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 				return -1;
 			}
 
+			//AKE NEW TODO: adapt function for new handshake
+			//AKE NEW: memcpy handshake_temp into conn->handshake
+			//AKE NEW TODO: verify that this works
+//			memcpy(conn->handshake, handshake_temp, sizeof(handshake_temp));
+			conn->handshake = handshake_temp;
+			//AKE NEW: free handshake -> No:
+			/*
+			 * An important note about the copying: It's a shallow copy, just like with memcpy.
+			 * That means if you have e.g. a structure containing pointers, it's only the actual
+			 * pointers that will be copied and not what they point to, so after the copy you will
+			 * have two pointers pointing to the same memory.
+			 * https://stackoverflow.com/questions/9127246/copy-struct-to-struct-in-c
+			 */
+//			noise_handshakestate_free(handshake_temp);
+
 			memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
 			// AKE: Peer A/initiator session pk is copied into the crypto connection from the new connection
+			//AKE NEW TODO: what is conn->peersessionpublic_key needed for? Do I need to set it?
 			memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
 			// AKE: Peer B/receiver calculates shared session key from Peer A/initiator public key and self session secret key
 			// AKE: Where is conn->sessionsecret_key coming from? => conn already existed -> there it is saved! Keys are generated in new_net_crypto()!
@@ -2345,7 +2431,7 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 	}
 
 	//AKE NEW: initialize_handshake
-	if (!initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key)) {
+	if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
 		noise_handshakestate_free(conn->handshake);
 		return -1;
 	}
@@ -2434,7 +2520,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 	}
 
 	//AKE NEW: initialize_handshake
-	if (!initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key)) {
+	if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
 		noise_handshakestate_free(conn->handshake);
 		return -1;
 	}
@@ -2798,6 +2884,7 @@ static int udp_handle_packet(void *object, IP_Port source, const uint8_t *packet
 
 	const int crypt_connection_id = crypto_id_ip_port(c, source);
 
+	// AKE: No crypto connection yet
 	if (crypt_connection_id == -1) {
 		if (packet[0] != NET_PACKET_CRYPTO_HS) {
 			return 1;
