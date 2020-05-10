@@ -2463,7 +2463,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 	}
 
 	//AKE NEW: initialize_handshake
-	//AKE NEW TODO: IMPORTANT n_c.publicy_key is empty/not defined here, but coming from handle_crypto_handshake()...
+	//AKE NEW: IMPORTANT n_c.publicy_key is empty/not defined here, but coming from handle_crypto_handshake()...
 	if (initialize_handshake(handshake_temp, c->self_secret_key, n_c.public_key) == -1) {
 		noise_handshakestate_free(handshake_temp);
 		return -1;
@@ -2549,6 +2549,11 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
  * return connection id on success.
  */
 // TODO AKE: This function needs to be called by Peer B/receiver, otherwise he cannot calculate his ephemeral keypair! (only if he also starts a handshake)
+
+/*
+* AKE NEW: 14:46:06 <@zugz> tb: it looks like handle_new_connection_handshake(), which is what calls accept_crypto_connection()
+* (via new_connection_callback), already calls handle_crypto_handshake()
+*/
 int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 {
 	fprintf(stderr, "ENTERING: accept_crypto_connection()\n");
@@ -2635,11 +2640,12 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 
 /* Create a crypto connection.
  * If one to that real public key already exists, return it.
+ * AKE: Perfect handshake: Peer A initiate handshake by creating and sending a cookie request.
+ * AKE: Realistic handshake: also called by Peer B
  *
  * return -1 on failure.
  * return connection id on success.
  */
-// AKE: Perfect handshake: Peer A initiate handshake by creating a sending a cookie request. Realistic handshake: also called by Peer B
 int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const uint8_t *dht_public_key)
 {
 	int crypt_connection_id = getcryptconnection_id(c, real_public_key);
