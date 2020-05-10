@@ -345,6 +345,17 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
 	uint8_t cookie_plain[COOKIE_DATA_LENGTH ];
 	// AKE copy the initiators/Peer A static public key to the (plain) cookie data
 	memcpy(cookie_plain, request_plain, CRYPTO_PUBLIC_KEY_SIZE);
+
+	//START AKE NEW:########################################################
+
+	/*
+	 * TODO here I know the public key of the peer and could initialize the handshake!
+	 * fuck but I don't have access to "conn" and conn->handshake
+	 * also the peer shouldn't allocate any memory during the cookie phase -> no temporary handshake variable
+	 */
+
+	//END AKE NEW:########################################################
+
 	// AKE copy the initiators/Peer A DHT public key to the (plain) cookie data
 	memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 	uint8_t plain[COOKIE_LENGTH + sizeof(uint64_t)];
@@ -357,7 +368,7 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
 	memcpy(plain + COOKIE_LENGTH, request_plain + COOKIE_DATA_LENGTH, sizeof(uint64_t));
 	// AKE: set NET_PACKET_COOKIE_RESPONSE => for packet handling
 	packet[0] = NET_PACKET_COOKIE_RESPONSE;
-	// AKE: Nonce used to encrypted cookie response packet
+	// AKE: Nonce used to encrypt cookie response packet
 	random_nonce(packet + 1);
 	int len = encrypt_data_symmetric(shared_key, packet + 1, plain, sizeof(plain), packet + 1 + CRYPTO_NONCE_SIZE);
 
@@ -648,6 +659,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
  */
 // AKE: Peer B/receiver handle incoming handshake packet
 //AKE NEW TODO: Adapt function for Noise handshake
+//AKE NEW: This is called if Noise handshake state is NOISE_ACTION_READ_MESSAGE
 static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t *session_pk, uint8_t *peer_real_pk,
 		uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
 		NoiseHandshakeState *handshake)
@@ -845,6 +857,7 @@ static IP_Port return_ip_port_connection(Net_Crypto *c, int crypt_connection_id)
 //AKE NEW TODO: const Net_Crypto or not const? => You cannot assign to a const value, even if assigning the same value => not sure if necessary
 //AKE NEW TODO: HandshakeState ist wahrscheinlich in Crypto_connection conn drin?
 //AKE NEW: don't need *prologue and prologue_len (fixed in Tox)
+//AKE NEW TODO: IK pattern: if role = responder => peer_public_key is not necessary
 static int initialize_handshake
 //(NoiseHandshakeState *handshake, const Net_Crypto *c, int crypt_connection_id)
 (NoiseHandshakeState *handshake, uint8_t *self_secret_key, uint8_t *peer_public_key)
@@ -1974,7 +1987,8 @@ bool udp, void *userdata)
 		//AKE NEW TODO: THIS SEEMS TO BE THE ONLY POSSIBILITY TO HANDLE A HANDSHAKE PACKET AS INITIATOR!
 	case NET_PACKET_CRYPTO_HS: {
 		// AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
-		fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => NET_PACKET_CRYPTO_HS => CRYPTO CONN STATE: %d\n", packet[0], conn->status);
+		fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => NET_PACKET_CRYPTO_HS => CRYPTO CONN STATE: %d\n", packet[0],
+				conn->status);
 		if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
 				&& conn->status != CRYPTO_CONN_HANDSHAKE_SENT
 				// TODO AKE: why is this status also checked? If it's set after the if
@@ -2016,8 +2030,14 @@ bool udp, void *userdata)
 //			return -1;
 //		}
 
-		if (handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
-				packet, length, conn->public_key, conn->handshake) != 0) {
+		int action = noise_handshakestate_get_action(conn->handshake);
+		if (action == NOISE_ACTION_READ_MESSAGE) {
+			fprintf(stderr, "handle_packet_connection(); ACTION: NOISE_ACTION_READ_MESSAGE\n");
+			if (handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
+					packet, length, conn->public_key, conn->handshake) != 0) {
+				return -1;
+			}
+		} else {
 			return -1;
 		}
 
@@ -2049,7 +2069,8 @@ bool udp, void *userdata)
 
 	case NET_PACKET_CRYPTO_DATA: {
 		if (conn->status != CRYPTO_CONN_NOT_CONFIRMED && conn->status != CRYPTO_CONN_ESTABLISHED) {
-			fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => ERROR => CRYPTO CONN STATE: %d\n", packet[0], conn->status);
+			fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => ERROR => CRYPTO CONN STATE: %d\n", packet[0],
+					conn->status);
 			return -1;
 		}
 		return handle_data_packet_core(c, crypt_connection_id, packet, length, udp, userdata);
