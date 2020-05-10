@@ -771,7 +771,8 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t 
 		//AKE NEW: "empty", but still needed in our case
 		NoiseBuffer noise_message;
 		//AKE NEW: ephemeral public key + INITIATOR static public key + payload + I think also the MAC is included
-		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH
+				+ CRYPTO_MAC_SIZE];
 		//AKE NEW: Copy the data from packet to the noise_message_buf
 		memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH);
 		NoiseBuffer noise_payload;
@@ -997,28 +998,27 @@ static int initialize_handshake
 		return -1;
 	}
 
-	//AKE NEW: IK pattern: if role = responder => peer_public_key is not necessary
-	int role = noise_handshakestate_get_role(handshake);
-	if (role == NOISE_ROLE_RESPONDER) {
-		if (self_secret_key) {
-			/* Set the local keypair for the client */
-			//AKE NEW: we need to load the local key pair
-			dh = noise_handshakestate_get_local_keypair_dh(handshake);
-			key_len = noise_dhstate_get_private_key_length(dh);
-			//AKE NEW: set local peer "key" from Net_crypto *c: c->self_secret_key
-			//err = noise_dhstate_set_keypair_private(dh, c->self_secret_key, key_len);
-			err = noise_dhstate_set_keypair_private(dh, self_secret_key, key_len);
-			//noise_free(key, key_len);
-			if (err != NOISE_ERROR_NONE) {
-				noise_perror("set client private key", err);
-				return -1;
-			}
-		}
-		else {
-			fprintf(stderr, "Client private key required, but not provided.\n");
+	if (self_secret_key) {
+		/* Set the local keypair for the client */
+		//AKE NEW: we need to load the local key pair
+		dh = noise_handshakestate_get_local_keypair_dh(handshake);
+		key_len = noise_dhstate_get_private_key_length(dh);
+		//AKE NEW: set local peer "key" from Net_crypto *c: c->self_secret_key
+		//err = noise_dhstate_set_keypair_private(dh, c->self_secret_key, key_len);
+		err = noise_dhstate_set_keypair_private(dh, self_secret_key, key_len);
+		//noise_free(key, key_len);
+		if (err != NOISE_ERROR_NONE) {
+			noise_perror("set client private key", err);
 			return -1;
 		}
-	} else {
+	}
+	else {
+		fprintf(stderr, "Client private key required, but not provided.\n");
+		return -1;
+	}
+	//AKE NEW: IK pattern: if role = INITIATOR => peer_public_key is also necessary
+	int role = noise_handshakestate_get_role(handshake);
+	if (role == NOISE_ROLE_RESPONDER) {
 		if (peer_public_key) {
 			dh = noise_handshakestate_get_remote_public_key_dh(handshake);
 			key_len = noise_dhstate_get_public_key_length(dh);
@@ -2124,7 +2124,8 @@ bool udp, void *userdata)
 		//AKE NEW TODO: THIS SEEMS TO BE THE ONLY POSSIBILITY TO HANDLE A HANDSHAKE PACKET AS INITIATOR!
 	case NET_PACKET_CRYPTO_HS: {
 		// AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
-		fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => NET_PACKET_CRYPTO_HS => CRYPTO CONN STATE: %d\n", packet[0],
+		fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => NET_PACKET_CRYPTO_HS => CRYPTO CONN STATE: %d\n",
+				packet[0],
 				conn->status);
 		if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
 				&& conn->status != CRYPTO_CONN_HANDSHAKE_SENT
@@ -2549,11 +2550,10 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
  * return connection id on success.
  */
 // TODO AKE: This function needs to be called by Peer B/receiver, otherwise he cannot calculate his ephemeral keypair! (only if he also starts a handshake)
-
 /*
-* AKE NEW: 14:46:06 <@zugz> tb: it looks like handle_new_connection_handshake(), which is what calls accept_crypto_connection()
-* (via new_connection_callback), already calls handle_crypto_handshake()
-*/
+ * AKE NEW: 14:46:06 <@zugz> tb: it looks like handle_new_connection_handshake(), which is what calls accept_crypto_connection()
+ * (via new_connection_callback), already calls handle_crypto_handshake()
+ */
 int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 {
 	fprintf(stderr, "ENTERING: accept_crypto_connection()\n");
@@ -3301,8 +3301,9 @@ static void send_crypto_packets(Net_Crypto *c)
 
 				if (((uint64_t) ((1000.0 / conn->packet_send_rate_requested) + 0.5) + conn->last_packets_left_requested_set) <=
 						temp_time) {
-					double n_packets = conn->packet_send_rate_requested * (((double) (temp_time - conn->last_packets_left_requested_set)) /
-							1000.0);
+					double n_packets = conn->packet_send_rate_requested
+							* (((double) (temp_time - conn->last_packets_left_requested_set)) /
+									1000.0);
 					n_packets += conn->last_packets_left_requested_rem;
 
 					uint32_t num_packets = n_packets;
