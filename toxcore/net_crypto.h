@@ -82,7 +82,7 @@
 #define PACKET_ID_LOSSY_CONFERENCE 199
 
 //AKE NEW CRYPTO_NOISE_PROTOCOL_NAME
-#define CRYPTO_NOISE_PROTOCOL_NAME "Noise_KK_25519_ChaChaPoly_SHA512"
+#define CRYPTO_NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
 
 /* Maximum size of receiving and sending packet buffers. */
 #define CRYPTO_PACKET_BUFFER_SIZE 32768 // Must be a power of 2
