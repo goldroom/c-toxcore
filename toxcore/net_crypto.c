@@ -1776,6 +1776,7 @@ static int clear_temp_packet(const Net_Crypto *c, int crypt_connection_id)
  */
 static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
 {
+	fprintf(stderr, "ENTERING: send_temp_packet()\n");
 	Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
 	if (conn == nullptr) {
@@ -2093,7 +2094,6 @@ bool udp, void *userdata)
 //			return -1;
 //		}
 
-		//AKE NEW TODO: get handshake role status
 		int role = noise_handshakestate_get_role(conn->handshake);
 		if (role == NOISE_ROLE_INITIATOR) {
 			int err = noise_handshakestate_start(conn->handshake);
@@ -2472,10 +2472,26 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 		return -1;
 	}
 
-	// AKE: Handle the crypto handshake packet from Peer A/initiator (incl. Other Cookie from A)
-	if (handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
-			n_c.cookie, data, length, nullptr, handshake_temp) != 0) {
-		free(n_c.cookie);
+	int role = noise_handshakestate_get_role(handshake_temp);
+	if (role == NOISE_ROLE_RESPONDER) {
+		int err = noise_handshakestate_start(handshake_temp);
+		if (err != NOISE_ERROR_NONE) {
+			noise_perror("start handshake", err);
+			//NEW AKE TODO: maybe I need to handle more here?
+			return -1;
+		}
+		//AKE NEW TODO: NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE an create_send_handshake übergeben und je nachdem die message bauen
+		int action = noise_handshakestate_get_action(handshake_temp);
+		if (action == NOISE_ACTION_READ_MESSAGE) {
+			// AKE: Handle the crypto handshake packet from Peer A/initiator (incl. Other Cookie from A)
+			if (handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
+					n_c.cookie, data, length, nullptr, handshake_temp) != 0) {
+				free(n_c.cookie);
+				return -1;
+			}
+		}
+
+	} else {
 		return -1;
 	}
 
