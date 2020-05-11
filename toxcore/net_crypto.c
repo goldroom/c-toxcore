@@ -65,15 +65,15 @@ typedef enum Crypto_Conn_State {
 
 typedef struct Crypto_Connection {
 	uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
-	//AKE NEW TODO: nonces not needed for Noise => handshake object
+	//AKE NEW: nonces not needed for Noise => handshake object
 	uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
 	uint8_t sent_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of sent packets. */
 	//AKE NEW TODO: session keys not needed for Noise => handshake object
 	uint8_t sessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* Our public key for this session. */
 	uint8_t sessionsecret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private key for this session. */
 	uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The session public key of the peer. */
-	//AKE NEW TODO: This shared_key should be hashed (HKDF) => done automatically in Noise => saved in handshake object
-	//AKE NEW TODO: shared_key still necessary for cookie phase / DHT-based shared_key
+	//AKE NEW: This shared_key should be hashed (HKDF) => done automatically in Noise => saved in handshake object
+	//AKE NEW: shared_key still necessary for cookie phase / DHT-based shared_key
 	uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. */
 	Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
 	uint64_t cookie_request_number; /* number used in the cookie request packets for this connection (echoID!) */
@@ -1457,7 +1457,8 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 	VLA(uint8_t, packet, 1 + sizeof(uint16_t) + length + CRYPTO_MAC_SIZE);
 	packet[0] = NET_PACKET_CRYPTO_DATA;
 	memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
-	const int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+	//AKE NEW: instead of conn->shared_key -> conn->send_cipher!
+	const int len = encrypt_data_symmetric(conn->send_cipher, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
 
 	if (len + 1 + sizeof(uint16_t) != SIZEOF_VLA(packet)) {
 		pthread_mutex_unlock(conn->mutex);
@@ -1620,8 +1621,8 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
 	net_unpack_u16(packet + 1, &num);
 	uint16_t diff = num - num_cur_nonce;
 	increment_nonce_number(nonce, diff);
-	//AKE NEW TODO: adapt shared_key to receiving/sending Noise key
-	int len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
+	//AKE NEW: instead of conn->shared_key Noise receiving key conn->recv_cipher
+	int len = decrypt_data_symmetric(conn->recv_cipher, nonce, packet + 1 + sizeof(uint16_t),
 			length - (1 + sizeof(uint16_t)), data);
 
 	if ((unsigned int) len != length - crypto_packet_overhead) {
@@ -2172,6 +2173,7 @@ bool udp, void *userdata)
 					noise_perror("split to start data transfer", err);
 					return -1;
 				}
+				fprintf(stderr, "handle_packet_connection(): NOISE SPLIT OK\n");
 			}
 		} else {
 			return -1;
@@ -2180,7 +2182,7 @@ bool udp, void *userdata)
 		//AKE NEW TODO: adapt?
 		if (public_key_cmp(dht_public_key, conn->dht_public_key) == 0) {
 			// AKE: Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
-			// TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
+			//AKE NEW: handled by Noise
 			encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
 
 			/*
@@ -2648,6 +2650,7 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 				noise_perror("split to start data transfer", err);
 				return -1;
 			}
+			fprintf(stderr, "accept_crypto_connection(): NOISE SPLIT OK\n");
 		}
 	} else {
 		return -1;
