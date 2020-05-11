@@ -29,6 +29,8 @@
 #include "TCP_connection.h"
 #include "logger.h"
 
+#include <noise/protocol.h>
+
 #include <pthread.h>
 
 /*** Crypto payloads. ***/
@@ -141,6 +143,7 @@ typedef struct New_Connection {
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     uint8_t *cookie;
     uint8_t cookie_length;
+    NoiseHandshakeState *handshake_temp;
 } New_Connection;
 
 typedef int connection_status_cb(void *object, int id, uint8_t status, void *userdata);

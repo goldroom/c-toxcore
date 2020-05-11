@@ -29,7 +29,7 @@
 
 #include "net_crypto.h"
 
-#include <noise/protocol.h>
+//#include <noise/protocol.h>
 
 #include <math.h>
 #include <stdlib.h>
@@ -1776,7 +1776,7 @@ static int clear_temp_packet(const Net_Crypto *c, int crypt_connection_id)
  */
 static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
 {
-	fprintf(stderr, "ENTERING: send_temp_packet()\n");
+	//fprintf(stderr, "ENTERING: send_temp_packet()\n");
 	Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
 	if (conn == nullptr) {
@@ -2150,32 +2150,15 @@ bool udp, void *userdata)
 		uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE];
 		uint8_t cookie[COOKIE_LENGTH ];
 
-		//AKE NEW TODO: handle Noise handshake state here?
-
-		//AKE NEW: Noise init
-//		if (noise_init() != NOISE_ERROR_NONE) {
-//			fprintf(stderr, "Noise initialization failed\n");
-//			return -1;
-//		}
-//		//AKE NEW: If I receive a handshake packet, I'm responder
-//		int err = noise_handshakestate_new_by_name(&conn->handshake, CRYPTO_NOISE_PROTOCOL_NAME, NOISE_ROLE_RESPONDER);
-//		if (err != NOISE_ERROR_NONE) {
-//			noise_perror(CRYPTO_NOISE_PROTOCOL_NAME, err);
-//			return -1;
-//		}
-//
-//		//AKE NEW: initialize_handshake
-//		if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
-//			noise_handshakestate_free(conn->handshake);
-//			return -1;
-//		}
-
-		int action = noise_handshakestate_get_action(conn->handshake);
-		if (action == NOISE_ACTION_READ_MESSAGE) {
-			fprintf(stderr, "handle_packet_connection(); ACTION: NOISE_ACTION_READ_MESSAGE\n");
-			if (handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
-					packet, length, conn->public_key, conn->handshake) != 0) {
-				return -1;
+		int role = noise_handshakestate_get_role(conn->handshake);
+		if (role == NOISE_ROLE_INITIATOR) {
+			int action = noise_handshakestate_get_action(conn->handshake);
+			if (action == NOISE_ACTION_READ_MESSAGE) {
+				fprintf(stderr, "handle_packet_connection(); ACTION: NOISE_ACTION_READ_MESSAGE\n");
+				if (handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
+						packet, length, conn->public_key, conn->handshake) != 0) {
+					return -1;
+				}
 			}
 		} else {
 			return -1;
@@ -2448,8 +2431,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 	n_c.source = source;
 	n_c.cookie_length = COOKIE_LENGTH;
 
-	//AKE NEW TODO: add HandshakeState to New_Connection? Or a local variable here?
-	NoiseHandshakeState *handshake_temp;
+	//AKE NEW TODO: add HandshakeState to New_Connection? Or a local variable here? => New_Connection for accept_crypto_connection!
+	//NoiseHandshakeState *handshake_temp;
 
 	//AKE NEW: IN THIS CASE THIS PEER IS DEFINATELY RESPONDER!
 	//AKE NEW: Noise init
@@ -2459,7 +2442,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 	}
 
 	//AKE NEW: If I receive a handshake packet, I'm responder
-	int err = noise_handshakestate_new_by_name(&handshake_temp, CRYPTO_NOISE_PROTOCOL_NAME, NOISE_ROLE_RESPONDER);
+	int err = noise_handshakestate_new_by_name(&n_c.handshake_temp, CRYPTO_NOISE_PROTOCOL_NAME, NOISE_ROLE_RESPONDER);
 	if (err != NOISE_ERROR_NONE) {
 		noise_perror(CRYPTO_NOISE_PROTOCOL_NAME, err);
 		return -1;
@@ -2467,25 +2450,25 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 
 	//AKE NEW: initialize_handshake
 	//AKE NEW: IMPORTANT n_c.publicy_key is empty/not defined here, but coming from handle_crypto_handshake()...
-	if (initialize_handshake(handshake_temp, c->self_secret_key, n_c.public_key) == -1) {
-		noise_handshakestate_free(handshake_temp);
+	if (initialize_handshake(n_c.handshake_temp, c->self_secret_key, n_c.public_key) == -1) {
+		noise_handshakestate_free(n_c.handshake_temp);
 		return -1;
 	}
 
-	int role = noise_handshakestate_get_role(handshake_temp);
+	int role = noise_handshakestate_get_role(n_c.handshake_temp);
 	if (role == NOISE_ROLE_RESPONDER) {
-		int err = noise_handshakestate_start(handshake_temp);
+		int err = noise_handshakestate_start(n_c.handshake_temp);
 		if (err != NOISE_ERROR_NONE) {
 			noise_perror("start handshake", err);
 			//NEW AKE TODO: maybe I need to handle more here?
 			return -1;
 		}
 		//AKE NEW TODO: NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE an create_send_handshake übergeben und je nachdem die message bauen
-		int action = noise_handshakestate_get_action(handshake_temp);
+		int action = noise_handshakestate_get_action(n_c.handshake_temp);
 		if (action == NOISE_ACTION_READ_MESSAGE) {
 			// AKE: Handle the crypto handshake packet from Peer A/initiator (incl. Other Cookie from A)
 			if (handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
-					n_c.cookie, data, length, nullptr, handshake_temp) != 0) {
+					n_c.cookie, data, length, nullptr, n_c.handshake_temp) != 0) {
 				free(n_c.cookie);
 				return -1;
 			}
@@ -2517,7 +2500,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 			//AKE NEW: memcpy handshake_temp into conn->handshake
 			//AKE NEW TODO: verify that this works
 //			memcpy(conn->handshake, handshake_temp, sizeof(handshake_temp));
-			conn->handshake = handshake_temp;
+			conn->handshake = n_c.handshake_temp;
 			//AKE NEW: free handshake -> No:
 			/*
 			 * An important note about the copying: It's a shallow copy, just like with memcpy.
@@ -2622,29 +2605,24 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 	conn->status = CRYPTO_CONN_NOT_CONFIRMED;
 
 	//AKE NEW: IN THIS CASE THIS PEER IS DEFINATELY RESPONDER!
-	//AKE NEW: Noise init
-	if (noise_init() != NOISE_ERROR_NONE) {
-		fprintf(stderr, "Noise initialization failed\n");
-		return -1;
-	}
-	//AKE NEW: If I receive a handshake packet, I'm responder
-	int err = noise_handshakestate_new_by_name(&conn->handshake, CRYPTO_NOISE_PROTOCOL_NAME, NOISE_ROLE_RESPONDER);
-	if (err != NOISE_ERROR_NONE) {
-		noise_perror(CRYPTO_NOISE_PROTOCOL_NAME, err);
-		return -1;
-	}
+	conn->handshake = n_c->handshake_temp;
 
-	//AKE NEW: initialize_handshake
-	if (initialize_handshake(conn->handshake, c->self_secret_key, conn->public_key) == -1) {
-		noise_handshakestate_free(conn->handshake);
-		return -1;
-	}
+	int role = noise_handshakestate_get_role(conn->handshake);
+	if (role == NOISE_ROLE_RESPONDER) {
+		//AKE NEW TODO: NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE an create_send_handshake übergeben und je nachdem die message bauen
+		int action = noise_handshakestate_get_action(conn->handshake);
+		if (action == NOISE_ACTION_WRITE_MESSAGE) {
+			// AKE: if cookie response was ok, create and send handshake packet to Peer B/receiver
+			if (create_send_handshake(c, crypt_connection_id, n_c->cookie, n_c->dht_public_key) != 0) {
+				pthread_mutex_lock(&c->tcp_mutex);
+				kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
+				pthread_mutex_unlock(&c->tcp_mutex);
+				wipe_crypto_connection(c, crypt_connection_id);
+				return -1;
+			}
+		}
 
-	if (create_send_handshake(c, crypt_connection_id, n_c->cookie, n_c->dht_public_key) != 0) {
-		pthread_mutex_lock(&c->tcp_mutex);
-		kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
-		pthread_mutex_unlock(&c->tcp_mutex);
-		wipe_crypto_connection(c, crypt_connection_id);
+	} else {
 		return -1;
 	}
 
