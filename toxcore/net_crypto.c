@@ -2160,10 +2160,24 @@ bool udp, void *userdata)
 					return -1;
 				}
 			}
+			/* If the action is not "split", then the handshake has failed */
+			if (noise_handshakestate_get_action(conn->handshake) != NOISE_ACTION_SPLIT) {
+				fprintf(stderr, "protocol handshake failed\n");
+				return -1;
+			}
+			/* Split out the two CipherState objects for send and receive */
+			else {
+				int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+				if (err != NOISE_ERROR_NONE) {
+					noise_perror("split to start data transfer", err);
+					return -1;
+				}
+			}
 		} else {
 			return -1;
 		}
 
+		//AKE NEW TODO: adapt?
 		if (public_key_cmp(dht_public_key, conn->dht_public_key) == 0) {
 			// AKE: Peer B (or Peer A, whoever receives the handshake packet) calculation of shared session key
 			// TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
@@ -2516,7 +2530,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 			memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
 			// AKE: Peer B/receiver calculates shared session key from Peer A/initiator public key and self session secret key
 			// AKE: Where is conn->sessionsecret_key coming from? => conn already existed -> there it is saved! Keys are generated in new_net_crypto()!
-			// TODO AKE: This shared_key should be hashed (HKDF) and not just the raw ECDH result as secret used.
+			//AKE NEW TODO: handeled by noise
 			encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
 
 			crypto_connection_add_source(c, crypt_connection_id, source);
@@ -2592,6 +2606,7 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 	memcpy(conn->public_key, n_c->public_key, CRYPTO_PUBLIC_KEY_SIZE);
 	memcpy(conn->recv_nonce, n_c->recv_nonce, CRYPTO_NONCE_SIZE);
 	// AKE: the peer's session pk is copied into the crypto connection from new connection
+	//AKE NEW TODO: NOT NECESSARY - handled by Noise
 	memcpy(conn->peersessionpublic_key, n_c->peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
 	// AKE: Nonce is set here, therefore call to handle_new_connection_handshake() only possible after call of this function!
 	random_nonce(conn->sent_nonce);
@@ -2621,7 +2636,19 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 				return -1;
 			}
 		}
-
+		/* If the action is not "split", then the handshake has failed */
+		if (noise_handshakestate_get_action(conn->handshake) != NOISE_ACTION_SPLIT) {
+			fprintf(stderr, "protocol handshake failed\n");
+			return -1;
+		}
+		/* Split out the two CipherState objects for send and receive */
+		else {
+			int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+			if (err != NOISE_ERROR_NONE) {
+				noise_perror("split to start data transfer", err);
+				return -1;
+			}
+		}
 	} else {
 		return -1;
 	}
