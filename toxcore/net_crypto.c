@@ -530,8 +530,8 @@ static int handle_cookie_response(const Logger *log, uint8_t *cookie, uint64_t *
 //AKE NEW TODO: redefine this after finishing the Noise handshake
 //#define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 #define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-//AKE NEW: Initiator also sends static public key
-#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//AKE NEW: Initiator also sends ENCRYPTED static public key with MAC
+#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 
 /* Create a handshake packet and put it in packet.
  * cookie must be COOKIE_LENGTH bytes.
@@ -615,8 +615,9 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 		 */
 		//AKE NEW: "empty", but still needed in our case
 		NoiseBuffer noise_message;
-		//AKE NEW: ephemeral public key + static public key INITIATOR + payload + I think also the MAC is included
-		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH
+		//AKE NEW: ephemeral public key + static pubkey INITIATOR + MAC static pubkey + payload + I think also the MAC is included
+		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
+				+ COOKIE_LENGTH
 				+ CRYPTO_MAC_SIZE];
 		NoiseBuffer noise_payload;
 		// AKE NEW: Payload contains base nonce, sha512 hash of cookie, and other cookie
@@ -770,8 +771,9 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t 
 	if (role == NOISE_ROLE_RESPONDER) {
 		//AKE NEW: "empty", but still needed in our case
 		NoiseBuffer noise_message;
-		//AKE NEW: ephemeral public key + INITIATOR static public key + payload + I think also the MAC is included
-		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH
+		//AKE NEW: ephemeral public key + encrypted INITIATOR static pubkey + MAC static pubkey + payload + I think also the MAC is included
+		uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
+				+ COOKIE_LENGTH
 				+ CRYPTO_MAC_SIZE];
 		//AKE NEW: Copy the data from packet to the noise_message_buf
 		memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH);
@@ -1804,7 +1806,7 @@ static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
 static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const uint8_t *cookie,
 		const uint8_t *dht_public_key)
 {
-	fprintf(stderr, "ENTERING: create_send_handshake()");
+	fprintf(stderr, "ENTERING: create_send_handshake()\n");
 	Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
 	if (conn == nullptr) {
