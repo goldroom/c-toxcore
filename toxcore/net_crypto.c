@@ -1011,15 +1011,15 @@ static int initialize_handshake
 			noise_perror("set client private key", err);
 			return -1;
 		}
-	}
-	else {
+	} else {
 		fprintf(stderr, "Client private key required, but not provided.\n");
 		return -1;
 	}
 	//AKE NEW: IK pattern: if role = INITIATOR => peer_public_key is also necessary
 	int role = noise_handshakestate_get_role(handshake);
-	if (role == NOISE_ROLE_RESPONDER) {
+	if (role == NOISE_ROLE_INITIATOR) {
 		if (peer_public_key) {
+			fprintf(stderr, "ENTERING: initialize_handshake() / peer_public_key\n");
 			dh = noise_handshakestate_get_remote_public_key_dh(handshake);
 			key_len = noise_dhstate_get_public_key_length(dh);
 			//key = (uint8_t*) malloc(key_len);
@@ -1031,8 +1031,7 @@ static int initialize_handshake
 				noise_perror("set server public key", err);
 				return -1;
 			}
-		}
-		else {
+		} else {
 			fprintf(stderr, "Server public key required, but not provided.\n");
 			return -1;
 		}
@@ -1805,6 +1804,7 @@ static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
 static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const uint8_t *cookie,
 		const uint8_t *dht_public_key)
 {
+	fprintf(stderr, "ENTERING: create_send_handshake()");
 	Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
 	if (conn == nullptr) {
@@ -2102,14 +2102,14 @@ bool udp, void *userdata)
 			}
 			//AKE NEW TODO: NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE an create_send_handshake übergeben und je nachdem die message bauen
 			int action = noise_handshakestate_get_action(conn->handshake);
-			//AKE NEW TODO: Call create_send_handshake() here
-		}
-		else {
-			return -1;
-		}
+			if (action == NOISE_ACTION_WRITE_MESSAGE) {
+				// AKE: if cookie response was ok, create and send handshake packet to Peer B/receiver
+				if (create_send_handshake(c, crypt_connection_id, cookie, conn->dht_public_key) != 0) {
+					return -1;
+				}
+			}
 
-		// AKE: if cookie response was ok, create and send handshake packet to Peer B/receiver
-		if (create_send_handshake(c, crypt_connection_id, cookie, conn->dht_public_key) != 0) {
+		} else {
 			return -1;
 		}
 
@@ -2479,6 +2479,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 
 	const int crypt_connection_id = getcryptconnection_id(c, n_c.public_key);
 
+	// AKE: Case where accept_crypto_connection() is not necessary
 	if (crypt_connection_id != -1) {
 		Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
@@ -2533,6 +2534,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 		}
 	}
 
+	// AKE: THIS SEEMS TO CALL accept_crypto_connection() => That's also why encrypt_precompute() and create_send_handshake() are called twice
 	int ret = c->new_connection_callback(c->new_connection_callback_object, &n_c);
 	free(n_c.cookie);
 	return ret;
