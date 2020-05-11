@@ -1441,7 +1441,9 @@ static int handle_request_packet(Mono_Time *mono_time, const Logger *log, Packet
  */
 static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_t *data, uint16_t length)
 {
-	const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE);
+	//AKE NEW TODO: + sizeof(uint16_t) + = last 2 bytes nonce used for encryption -> remove?
+	//const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE);
+	const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + CRYPTO_MAC_SIZE);
 
 	if (length == 0 || length > max_length) {
 		return -1;
@@ -1454,18 +1456,38 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 	}
 
 	pthread_mutex_lock(conn->mutex);
-	VLA(uint8_t, packet, 1 + sizeof(uint16_t) + length + CRYPTO_MAC_SIZE);
+	//AKE NEW TODO: remove sizeof(uint16_t)?
+	//VLA(uint8_t, packet, 1 + sizeof(uint16_t) + length + CRYPTO_MAC_SIZE);
+	VLA(uint8_t, packet, 1 + length + CRYPTO_MAC_SIZE);
 	packet[0] = NET_PACKET_CRYPTO_DATA;
-	memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
-	//AKE NEW: instead of conn->shared_key -> conn->send_cipher!
-	const int len = encrypt_data_symmetric(conn->send_cipher, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+	//AKE NEW TODO: don't need that step? copies the last 2 bytes of the nonce
+	//memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
+	//AKE NEW: can't use conn->send_cipher directly because it's not only the key
+	//const int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
 
-	if (len + 1 + sizeof(uint16_t) != SIZEOF_VLA(packet)) {
-		pthread_mutex_unlock(conn->mutex);
+	/* Encrypt the message and send it */
+	NoiseBuffer noise_message;
+	//AKE NEW TODO: don't need this and can just use data? => no, need memory for MAC
+	uint8_t noise_message_buf[length + CRYPTO_MAC_SIZE];
+	memcpy(noise_message_buf, data, length);
+
+	noise_buffer_set_inout(noise_message, noise_message_buf, length, sizeof(noise_message_buf));
+	int err = noise_cipherstate_encrypt(conn->send_cipher, &noise_message);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("noise_cipherstate_encrypt", err);
 		return -1;
 	}
+	// copy ciphertext to packet
+	memcpy(packet + 1, noise_message_buf, sizeof(noise_message_buf));
 
-	increment_nonce(conn->sent_nonce);
+	//AKE NEW TODO: do I need this?
+//	if (len + 1 + sizeof(uint16_t) != SIZEOF_VLA(packet)) {
+//		pthread_mutex_unlock(conn->mutex);
+//		return -1;
+//	}
+
+	//AKE NEW: not necessary
+//	increment_nonce(conn->sent_nonce);
 	pthread_mutex_unlock(conn->mutex);
 
 	return send_packet_to(c, crypt_connection_id, packet, SIZEOF_VLA(packet));
@@ -1601,7 +1623,9 @@ static uint16_t get_nonce_uint16(const uint8_t *nonce)
 static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint8_t *data, const uint8_t *packet,
 		uint16_t length)
 {
-	const uint16_t crypto_packet_overhead = 1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE;
+	//AKE NEW: removed nonce from packet
+	//const uint16_t crypto_packet_overhead = 1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE;
+	const uint16_t crypto_packet_overhead = 1 + CRYPTO_MAC_SIZE;
 
 	if (length <= crypto_packet_overhead || length > MAX_CRYPTO_PACKET_SIZE) {
 		return -1;
@@ -1613,27 +1637,50 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
 		return -1;
 	}
 
-	uint8_t nonce[CRYPTO_NONCE_SIZE];
-	// AKE: copy BASENONCE (= recv_nonce) into nonce
-	memcpy(nonce, conn->recv_nonce, CRYPTO_NONCE_SIZE);
-	uint16_t num_cur_nonce = get_nonce_uint16(nonce);
-	uint16_t num;
-	net_unpack_u16(packet + 1, &num);
-	uint16_t diff = num - num_cur_nonce;
-	increment_nonce_number(nonce, diff);
-	//AKE NEW: instead of conn->shared_key Noise receiving key conn->recv_cipher
-	int len = decrypt_data_symmetric(conn->recv_cipher, nonce, packet + 1 + sizeof(uint16_t),
-			length - (1 + sizeof(uint16_t)), data);
+	//AKE NEW: Nonce stuff not necessary
+//	uint8_t nonce[CRYPTO_NONCE_SIZE];
+//	// AKE: copy BASENONCE (= recv_nonce) into nonce
+//	memcpy(nonce, conn->recv_nonce, CRYPTO_NONCE_SIZE);
+//	uint16_t num_cur_nonce = get_nonce_uint16(nonce);
+//	uint16_t num;
+//	net_unpack_u16(packet + 1, &num);
+//	uint16_t diff = num - num_cur_nonce;
+//	increment_nonce_number(nonce, diff);
+	//AKE NEW: instead of conn->shared_key Noise receiving key conn->recv_cipher => NOT POSSIBLE
+//	int len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
+//			length - (1 + sizeof(uint16_t)), data);
 
-	if ((unsigned int) len != length - crypto_packet_overhead) {
+	//AKE NEW TODO: length is 1+encrypted+MAC
+
+	/* Encrypt the message and send it */
+	NoiseBuffer noise_message;
+	//AKE NEW TODO: don't need this and can just use data? => no, need memory for MAC
+	uint8_t noise_message_buf[length - 1];
+	memcpy(noise_message_buf, packet + 1, length - 1);
+
+	/* Decrypt the incoming message */
+	noise_buffer_set_input(noise_message, noise_message_buf, sizeof(noise_message_buf));
+	int err = noise_cipherstate_decrypt(conn->recv_cipher, &noise_message);
+	if (err != NOISE_ERROR_NONE) {
+		noise_perror("noise_cipherstate_decrypt", err);
 		return -1;
 	}
 
-	if (diff > DATA_NUM_THRESHOLD * 2) {
-		increment_nonce_number(conn->recv_nonce, DATA_NUM_THRESHOLD);
-	}
+	// memcpy plaintext to data
+	memcpy(data, noise_message.data, noise_message.size);
 
-	return len;
+	//AKE NEW TODO: I guess I should also check this
+//	if ((unsigned int) len != length - crypto_packet_overhead) {
+//		return -1;
+//	}
+
+	//AKE NEW TODO: I guess I should also check this
+//	if (diff > DATA_NUM_THRESHOLD * 2) {
+//		increment_nonce_number(conn->recv_nonce, DATA_NUM_THRESHOLD);
+//	}
+
+	//return len;
+	return noise_message.size;
 }
 
 /* Send a request packet.
@@ -2174,6 +2221,9 @@ bool udp, void *userdata)
 					return -1;
 				}
 				fprintf(stderr, "handle_packet_connection(): NOISE SPLIT OK\n");
+				/* We no longer need the HandshakeState */
+				noise_handshakestate_free(conn->handshake);
+				conn->handshake = 0;
 			}
 		} else {
 			return -1;
@@ -2651,6 +2701,9 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 				return -1;
 			}
 			fprintf(stderr, "accept_crypto_connection(): NOISE SPLIT OK\n");
+			/* We no longer need the HandshakeState */
+			noise_handshakestate_free(conn->handshake);
+			conn->handshake = 0;
 		}
 	} else {
 		return -1;
