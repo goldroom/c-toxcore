@@ -2687,9 +2687,10 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 					fprintf(stderr, "protocol handshake failed\n");
 					//AKE NEW: handshake failed, free memory
 					noise_handshakestate_free(conn->handshake);
-					noise_handshakestate_free(n_c.handshake_temp);
+					//AKE NEW: Only free one of the handshake objects, otherwise it's a double free/segfault
+//					noise_handshakestate_free(n_c.handshake_temp);
 					conn->handshake = 0;
-					n_c.handshake_temp = 0;
+//					n_c.handshake_temp = 0;
 					//AKE NEW TODO: or wipe_crypto_connection() or kill?
 					wipe_crypto_connection(c, crypt_connection_id);
 					return -1;
@@ -2700,17 +2701,19 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 					if (err != NOISE_ERROR_NONE) {
 						noise_perror("split to start data transfer", err);
 						noise_handshakestate_free(conn->handshake);
-						noise_handshakestate_free(n_c.handshake_temp);
+						//AKE NEW: Only free one of the handshake objects, otherwise it's a double free/segfault
+//						noise_handshakestate_free(n_c.handshake_temp);
 						conn->handshake = 0;
-						n_c.handshake_temp = 0;
+//						n_c.handshake_temp = 0;
 						return -1;
 					}
-					fprintf(stderr, "accept_crypto_connection(): NOISE SPLIT OK\n");
+					fprintf(stderr, "handle_new_connection_handshake(): NOISE SPLIT OK\n");
 					/*AKE NEW: We no longer need the HandshakeState */
 					noise_handshakestate_free(conn->handshake);
-					noise_handshakestate_free(n_c.handshake_temp);
+					//AKE NEW: Only free one of the handshake objects, otherwise it's a double free/segfault
+//					noise_handshakestate_free(n_c.handshake_temp);
 					conn->handshake = 0;
-					n_c.handshake_temp = 0;
+//					n_c.handshake_temp = 0;
 				}
 			} else {
 				//AKE NEW TODO: what to do in this case?
@@ -2822,9 +2825,10 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 			fprintf(stderr, "protocol handshake failed\n");
 			//AKE NEW: handshake failed, free memory
 			noise_handshakestate_free(conn->handshake);
-			noise_handshakestate_free(n_c->handshake_temp);
+			//AKE NEW: only free one of the handshake objects because otherwise it's a double free/segfault
+//			noise_handshakestate_free(n_c->handshake_temp);
 			conn->handshake = 0;
-			n_c->handshake_temp = 0;
+//			n_c->handshake_temp = 0;
 			//AKE NEW TODO: or wipe_crypto_connection() or kill?
 			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
@@ -2835,9 +2839,10 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 			if (err != NOISE_ERROR_NONE) {
 				noise_perror("split to start data transfer", err);
 				noise_handshakestate_free(conn->handshake);
-				noise_handshakestate_free(n_c->handshake_temp);
+				//AKE NEW: only free one of the handshake objects because otherwise it's a double free/segfault
+//				noise_handshakestate_free(n_c->handshake_temp);
 				conn->handshake = 0;
-				n_c->handshake_temp = 0;
+//				n_c->handshake_temp = 0;
 				//AKE NEW TODO: or wipe_crypto_connection() or kill?
 				wipe_crypto_connection(c, crypt_connection_id);
 				return -1;
@@ -2845,9 +2850,11 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 			fprintf(stderr, "accept_crypto_connection(): NOISE SPLIT OK\n");
 			/*AKE NEW: We no longer need the HandshakeState */
 			noise_handshakestate_free(conn->handshake);
-			noise_handshakestate_free(n_c->handshake_temp);
+			//AKE NEW: only free one of the handshake objects because otherwise it's a double free/segfault
+//			noise_handshakestate_free(n_c->handshake_temp);
 			conn->handshake = 0;
-			n_c->handshake_temp = 0;
+//			n_c->handshake_temp = 0;
+			fprintf(stderr, "accept_crypto_connection(): Segmentation fault here?\n");
 		}
 	} else {
 		//AKE NEW TODO: what to do in this case?
