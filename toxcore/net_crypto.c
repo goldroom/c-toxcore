@@ -1518,8 +1518,8 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 			 * the application must delete the CipherState and terminate the session."
 			 * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
 			 */
-			//AKE NEW TODO: connection_kill() / crypto_kill() / wipe_crypto_connection()?
-			wipe_crypto_connection(c, crypt_connection_id);
+			//AKE NEW TODO: connection_kill() / crypto_kill() / wipe_crypto_connection()? => wipe not available here
+//			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
 		} else {
 			noise_perror("noise_cipherstate_encrypt", err);
@@ -1736,8 +1736,8 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
 			 * the application must delete the CipherState and terminate the session."
 			 * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
 			 */
-			//AKE NEW TODO: connection_kill() / wipe?
-			wipe_crypto_connection(c, crypt_connection_id);
+			//AKE NEW TODO: connection_kill() / wipe? => wipe not available here
+//			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
 		} else {
 			noise_perror("noise_cipherstate_decrypt", err);
@@ -2289,8 +2289,8 @@ bool udp, void *userdata)
 				fprintf(stderr, "protocol handshake failed\n");
 				noise_handshakestate_free(conn->handshake);
 				conn->handshake = 0;
-				//AKE NEW TODO: connection_kill() is possible here, or crypto_kill() or wipe_crypto_connection()
-				wipe_crypto_connection(c, crypt_connection_id);
+				//AKE NEW TODO: connection_kill() is possible here, or crypto_kill() or wipe_crypto_connection() => wipe not available here
+//				wipe_crypto_connection(c, crypt_connection_id);
 				return -1;
 			}
 			/*AKE NEW: Split out the two CipherState objects for send and receive */
@@ -2300,8 +2300,8 @@ bool udp, void *userdata)
 					noise_perror("split to start data transfer", err);
 					noise_handshakestate_free(conn->handshake);
 					conn->handshake = 0;
-					//AKE NEW TODO: crypto_kill() / wipe_crypto_connection() in this case? connection_kill is possible here
-					wipe_crypto_connection(c, crypt_connection_id);
+					//AKE NEW TODO: crypto_kill() / wipe_crypto_connection() in this case? connection_kill is possible here wipe not available here
+//					wipe_crypto_connection(c, crypt_connection_id);
 					return -1;
 				}
 				fprintf(stderr, "handle_packet_connection(): NOISE SPLIT OK\n");
