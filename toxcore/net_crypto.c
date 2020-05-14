@@ -1508,7 +1508,7 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 	if (err != NOISE_ERROR_NONE) {
 		if (err == NOISE_ERROR_INVALID_NONCE) {
 			/*
-			 * NEW TODO: The threshold for the counter-based nonce in Noise is 2^64-1
+			 * AKE NEW: The threshold for the counter-based nonce in Noise is 2^64-1
 			 * From Noise paper:
 			 * "Incrementing nonces: Reusing a nonce value for n with the same key k for encryption would be catastrophic.
 			 * Implementations must carefully follow the rules for nonces. Nonces are not allowed to wrap back to zero due
@@ -1518,7 +1518,8 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 			 * the application must delete the CipherState and terminate the session."
 			 * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
 			 */
-			//AKE NEW TODO: connection_kill / wipe?
+			//AKE NEW TODO: connection_kill() / crypto_kill() / wipe_crypto_connection()?
+			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
 		} else {
 			noise_perror("noise_cipherstate_encrypt", err);
@@ -1527,8 +1528,9 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 	}
 	//AKE NEW: copy ciphertext to packet
 	memcpy(packet + 1, noise_message_buf, sizeof(noise_message_buf));
-	//AKE NEW TODO: own Noise encryption function like encrypt_data_symmetric() -> also there is padding?
 	/*
+	 * AKE NEW: own Noise encryption function like encrypt_data_symmetric() -> also there is padding?
+	 * => I think not necessary
 	 * Padding:
 	 * <@iphy> tb`: WARNING: Messages in the C NaCl API are 0-padded versions of messages in the C++ NaCl API.
 	 * Specifically: The caller must ensure, before calling the C NaCl crypto_box function, that the first
@@ -1542,7 +1544,6 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 //		pthread_mutex_unlock(conn->mutex);
 //		return -1;
 //	}
-
 	//AKE NEW: not necessary
 //	increment_nonce(conn->sent_nonce);
 	pthread_mutex_unlock(conn->mutex);
@@ -1736,6 +1737,7 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
 			 * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
 			 */
 			//AKE NEW TODO: connection_kill() / wipe?
+			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
 		} else {
 			noise_perror("noise_cipherstate_decrypt", err);
@@ -2229,6 +2231,7 @@ bool udp, void *userdata)
 			if (err != NOISE_ERROR_NONE) {
 				if (err == NOISE_ERROR_INVALID_STATE) {
 					//AKE NEW TODO kill crypto connection
+					// connection_kill() would be possible here
 				} else {
 					noise_perror("start handshake", err);
 				}
@@ -2286,6 +2289,8 @@ bool udp, void *userdata)
 				fprintf(stderr, "protocol handshake failed\n");
 				noise_handshakestate_free(conn->handshake);
 				conn->handshake = 0;
+				//AKE NEW TODO: connection_kill() is possible here, or crypto_kill() or wipe_crypto_connection()
+				wipe_crypto_connection(c, crypt_connection_id);
 				return -1;
 			}
 			/*AKE NEW: Split out the two CipherState objects for send and receive */
@@ -2295,7 +2300,8 @@ bool udp, void *userdata)
 					noise_perror("split to start data transfer", err);
 					noise_handshakestate_free(conn->handshake);
 					conn->handshake = 0;
-					//AKE NEW TODO: kill / wipe crypto connection in this case?
+					//AKE NEW TODO: crypto_kill() / wipe_crypto_connection() in this case? connection_kill is possible here
+					wipe_crypto_connection(c, crypt_connection_id);
 					return -1;
 				}
 				fprintf(stderr, "handle_packet_connection(): NOISE SPLIT OK\n");
@@ -2606,7 +2612,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 		int err = noise_handshakestate_start(n_c.handshake_temp);
 		if (err != NOISE_ERROR_NONE) {
 			noise_perror("start handshake", err);
-			//AKE NEW TODO: kill / wipe crypto connection?
+			//AKE NEW: kill / wipe crypto connection? => no crypto connection here (is created afterwards)
 			return -1;
 		}
 		int action = noise_handshakestate_get_action(n_c.handshake_temp);
@@ -2680,11 +2686,12 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 				if (noise_handshakestate_get_action(conn->handshake) != NOISE_ACTION_SPLIT) {
 					fprintf(stderr, "protocol handshake failed\n");
 					//AKE NEW: handshake failed, free memory
-					//AKE NEW TODO: or wipe_crypto_connection()?
 					noise_handshakestate_free(conn->handshake);
 					noise_handshakestate_free(n_c.handshake_temp);
 					conn->handshake = 0;
 					n_c.handshake_temp = 0;
+					//AKE NEW TODO: or wipe_crypto_connection() or kill?
+					wipe_crypto_connection(c, crypt_connection_id);
 					return -1;
 				}
 				/*AKE NEW: Split out the two CipherState objects for send and receive */
@@ -2707,6 +2714,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 				}
 			} else {
 				//AKE NEW TODO: what to do in this case?
+				wipe_crypto_connection(c, crypt_connection_id);
 				return -1;
 			}
 
@@ -2813,11 +2821,12 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 		if (noise_handshakestate_get_action(conn->handshake) != NOISE_ACTION_SPLIT) {
 			fprintf(stderr, "protocol handshake failed\n");
 			//AKE NEW: handshake failed, free memory
-			//AKE NEW TODO: or wipe_crypto_connection()?
 			noise_handshakestate_free(conn->handshake);
 			noise_handshakestate_free(n_c->handshake_temp);
 			conn->handshake = 0;
 			n_c->handshake_temp = 0;
+			//AKE NEW TODO: or wipe_crypto_connection() or kill?
+			wipe_crypto_connection(c, crypt_connection_id);
 			return -1;
 		}
 		/*AKE NEW: Split out the two CipherState objects for send and receive */
@@ -2829,6 +2838,8 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 				noise_handshakestate_free(n_c->handshake_temp);
 				conn->handshake = 0;
 				n_c->handshake_temp = 0;
+				//AKE NEW TODO: or wipe_crypto_connection() or kill?
+				wipe_crypto_connection(c, crypt_connection_id);
 				return -1;
 			}
 			fprintf(stderr, "accept_crypto_connection(): NOISE SPLIT OK\n");
@@ -2840,6 +2851,8 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 		}
 	} else {
 		//AKE NEW TODO: what to do in this case?
+		//AKE NEW: or wipe_crypto_connection() or kill?
+		wipe_crypto_connection(c, crypt_connection_id);
 		return -1;
 	}
 
