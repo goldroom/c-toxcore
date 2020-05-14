@@ -1,26 +1,11 @@
-/*
- * Tox DHT bootstrap daemon.
- * Main file.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2014-2016 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2014-2016 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Tox DHT bootstrap daemon.
+ * Main file.
  */
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
@@ -421,7 +406,8 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        tcp_server = new_TCP_server(enable_ipv6, tcp_relay_port_count, tcp_relay_ports, dht_get_self_secret_key(dht), onion);
+        tcp_server = new_TCP_server(logger, enable_ipv6, tcp_relay_port_count, tcp_relay_ports, dht_get_self_secret_key(dht),
+                                    onion);
 
         free(tcp_relay_ports);
 

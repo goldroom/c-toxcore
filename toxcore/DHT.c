@@ -1,25 +1,10 @@
-/*
- * An implementation of the DHT as seen in docs/updates/DHT.md
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2013 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2013 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * An implementation of the DHT as seen in docs/updates/DHT.md
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -188,6 +173,11 @@ const uint8_t *dht_get_friend_public_key(const DHT *dht, uint32_t friend_num)
     return dht->friends_list[friend_num].public_key;
 }
 
+static bool assoc_timeout(const Mono_Time *mono_time, const IPPTsPng *assoc)
+{
+    return mono_time_is_timeout(mono_time, assoc->timestamp, BAD_NODE_TIMEOUT);
+}
+
 /* Compares pk1 and pk2 with pk.
  *
  *  return 0 if both are same distance.
@@ -247,7 +237,7 @@ static unsigned int bit_by_bit_cmp(const uint8_t *pk1, const uint8_t *pk2)
 void get_shared_key(const Mono_Time *mono_time, Shared_Keys *shared_keys, uint8_t *shared_key,
                     const uint8_t *secret_key, const uint8_t *public_key)
 {
-    uint32_t num = ~0;
+    uint32_t num = -1;
     uint32_t curr = 0;
 
     for (uint32_t i = 0; i < MAX_KEYS_PER_SLOT; ++i) {
@@ -593,7 +583,8 @@ int pack_nodes(uint8_t *data, uint16_t length, const Node_format *nodes, uint16_
 int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed_data_len, const uint8_t *data,
                  uint16_t length, bool tcp_enabled)
 {
-    uint32_t num = 0, len_processed = 0;
+    uint32_t num = 0;
+    uint32_t len_processed = 0;
 
     while (num < max_num_nodes && len_processed < length) {
         const int ipp_size = unpack_ip_port(&nodes[num].ip_port, data + len_processed, length - len_processed, tcp_enabled);
@@ -625,7 +616,7 @@ int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed
     return num;
 }
 
-/* Find index of ##type with public_key equal to pk.
+/* Find index in an array with public_key equal to pk.
  *
  *  return index or UINT32_MAX if not found.
  */
@@ -793,6 +784,7 @@ static uint8_t hardening_correct(const Hardening *h)
 {
     return h->routes_requests_ok + (h->send_nodes_ok << 1) + (h->testing_requests << 2);
 }
+
 /*
  * helper for get_close_nodes(). argument list is a monster :D
  */
@@ -814,7 +806,7 @@ static void get_close_nodes_inner(const Mono_Time *mono_time, const uint8_t *pub
             continue;
         }
 
-        const IPPTsPng *ipptp = nullptr;
+        const IPPTsPng *ipptp;
 
         if (net_family_is_ipv4(sa_family)) {
             ipptp = &client->assoc4;
@@ -827,7 +819,7 @@ static void get_close_nodes_inner(const Mono_Time *mono_time, const uint8_t *pub
         }
 
         /* node not in a good condition? */
-        if (mono_time_is_timeout(mono_time, ipptp->timestamp, BAD_NODE_TIMEOUT)) {
+        if (assoc_timeout(mono_time, ipptp)) {
             continue;
         }
 
@@ -901,11 +893,6 @@ typedef struct DHT_Cmp_data {
     Client_data entry;
 } DHT_Cmp_data;
 
-static bool assoc_timeout(const Mono_Time *mono_time, const IPPTsPng *assoc)
-{
-    return mono_time_is_timeout(mono_time, assoc->timestamp, BAD_NODE_TIMEOUT);
-}
-
 static bool incorrect_hardening(const IPPTsPng *assoc)
 {
     return hardening_correct(&assoc->hardening) != HARDENING_ALL_OK;
@@ -913,7 +900,8 @@ static bool incorrect_hardening(const IPPTsPng *assoc)
 
 static int cmp_dht_entry(const void *a, const void *b)
 {
-    DHT_Cmp_data cmp1, cmp2;
+    DHT_Cmp_data cmp1;
+    DHT_Cmp_data cmp2;
     memcpy(&cmp1, a, sizeof(DHT_Cmp_data));
     memcpy(&cmp2, b, sizeof(DHT_Cmp_data));
     const Client_data entry1 = cmp1.entry;
@@ -967,8 +955,8 @@ static int cmp_dht_entry(const void *a, const void *b)
 static unsigned int store_node_ok(const Client_data *client, const Mono_Time *mono_time, const uint8_t *public_key,
                                   const uint8_t *comp_public_key)
 {
-    return (mono_time_is_timeout(mono_time, client->assoc4.timestamp, BAD_NODE_TIMEOUT)
-            && mono_time_is_timeout(mono_time, client->assoc6.timestamp, BAD_NODE_TIMEOUT))
+    return (assoc_timeout(mono_time, &client->assoc4)
+            && assoc_timeout(mono_time, &client->assoc6))
            || id_closest(comp_public_key, client->public_key, public_key) == 2;
 }
 
@@ -1074,8 +1062,8 @@ static int add_to_close(DHT *dht, const uint8_t *public_key, IP_Port ip_port, bo
          * index is left as >= LCLIENT_LENGTH */
         Client_data *const client = &dht->close_clientlist[(index * LCLIENT_NODES) + i];
 
-        if (!mono_time_is_timeout(dht->mono_time, client->assoc4.timestamp, BAD_NODE_TIMEOUT) ||
-                !mono_time_is_timeout(dht->mono_time, client->assoc6.timestamp, BAD_NODE_TIMEOUT)) {
+        if (!assoc_timeout(dht->mono_time, &client->assoc4) ||
+                !assoc_timeout(dht->mono_time, &client->assoc6)) {
             continue;
         }
 
@@ -1111,7 +1099,7 @@ static bool is_pk_in_client_list(const Client_data *list, unsigned int client_li
                             ? &list[index].assoc4
                             : &list[index].assoc6;
 
-    return !mono_time_is_timeout(mono_time, assoc->timestamp, BAD_NODE_TIMEOUT);
+    return !assoc_timeout(mono_time, assoc);
 }
 
 static bool is_pk_in_close_list(DHT *dht, const uint8_t *public_key, IP_Port ip_port)
@@ -1127,7 +1115,7 @@ static bool is_pk_in_close_list(DHT *dht, const uint8_t *public_key, IP_Port ip_
 }
 
 /* Check if the node obtained with a get_nodes with public_key should be pinged.
- * NOTE: for best results call it after addto_lists;
+ * NOTE: for best results call it after addto_lists.
  *
  * return false if the node should not be pinged.
  * return true if it should.
@@ -1690,7 +1678,7 @@ int dht_getfriendip(const DHT *dht, const uint8_t *public_key, IP_Port *ip_port)
     for (const IPPTsPng * const *it = assocs; *it; ++it) {
         const IPPTsPng *const assoc = *it;
 
-        if (!mono_time_is_timeout(dht->mono_time, assoc->timestamp, BAD_NODE_TIMEOUT)) {
+        if (!assoc_timeout(dht->mono_time, assoc)) {
             *ip_port = assoc->ip_port;
             return 1;
         }
@@ -1731,7 +1719,7 @@ static uint8_t do_ping_and_sendnode_requests(DHT *dht, uint64_t *lastgetnode, co
                 }
 
                 /* If node is good. */
-                if (!mono_time_is_timeout(dht->mono_time, assoc->timestamp, BAD_NODE_TIMEOUT)) {
+                if (!assoc_timeout(dht->mono_time, assoc)) {
                     client_list[num_nodes] = client;
                     assoc_list[num_nodes] = assoc;
                     ++num_nodes;
@@ -1932,8 +1920,8 @@ static int friend_iplist(const DHT *dht, IP_Port *ip_portlist, uint16_t friend_n
         }
 
         if (id_equal(client->public_key, dht_friend->public_key)) {
-            if (!mono_time_is_timeout(dht->mono_time, client->assoc6.timestamp, BAD_NODE_TIMEOUT)
-                    || !mono_time_is_timeout(dht->mono_time, client->assoc4.timestamp, BAD_NODE_TIMEOUT)) {
+            if (!assoc_timeout(dht->mono_time, &client->assoc6)
+                    || !assoc_timeout(dht->mono_time, &client->assoc4)) {
                 return 0; /* direct connectivity */
             }
         }
@@ -2403,7 +2391,7 @@ static uint32_t have_nodes_closelist(DHT *dht, Node_format *nodes, uint16_t num)
         const IPPTsPng *const temp = get_closelist_IPPTsPng(dht, nodes[i].public_key, nodes[i].ip_port.ip.family);
 
         if (temp) {
-            if (!mono_time_is_timeout(dht->mono_time, temp->timestamp, BAD_NODE_TIMEOUT)) {
+            if (!assoc_timeout(dht->mono_time, temp)) {
                 ++counter;
             }
         }
@@ -2431,7 +2419,8 @@ static int handle_hardening(void *object, IP_Port source, const uint8_t *source_
                 return 1;
             }
 
-            Node_format node, tocheck_node;
+            Node_format node;
+            Node_format tocheck_node;
             node.ip_port = source;
             memcpy(node.public_key, source_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
             memcpy(&tocheck_node, packet + 1, sizeof(Node_format));
@@ -2534,11 +2523,11 @@ static uint16_t list_nodes(Client_data *list, size_t length, const Mono_Time *mo
     for (size_t i = length; i != 0; --i) {
         const IPPTsPng *assoc = nullptr;
 
-        if (!mono_time_is_timeout(mono_time, list[i - 1].assoc4.timestamp, BAD_NODE_TIMEOUT)) {
+        if (!assoc_timeout(mono_time, &list[i - 1].assoc4)) {
             assoc = &list[i - 1].assoc4;
         }
 
-        if (!mono_time_is_timeout(mono_time, list[i - 1].assoc6.timestamp, BAD_NODE_TIMEOUT)) {
+        if (!assoc_timeout(mono_time, &list[i - 1].assoc6)) {
             if (assoc == nullptr) {
                 assoc = &list[i - 1].assoc6;
             } else if (random_u08() % 2) {
@@ -2610,7 +2599,7 @@ static void do_hardening(DHT *dht)
             sa_family = net_family_ipv6;
         }
 
-        if (mono_time_is_timeout(dht->mono_time, cur_iptspng->timestamp, BAD_NODE_TIMEOUT)) {
+        if (assoc_timeout(dht->mono_time, cur_iptspng)) {
             continue;
         }
 
@@ -2734,6 +2723,11 @@ DHT *new_dht(const Logger *log, Mono_Time *mono_time, Networking_Core *net, bool
 
     dht->dht_ping_array = ping_array_new(DHT_PING_ARRAY_SIZE, PING_TIMEOUT);
     dht->dht_harden_ping_array = ping_array_new(DHT_PING_ARRAY_SIZE, PING_TIMEOUT);
+
+    if (dht->dht_ping_array == nullptr || dht->dht_harden_ping_array == nullptr) {
+        kill_dht(dht);
+        return nullptr;
+    }
 
     for (uint32_t i = 0; i < DHT_FAKE_FRIEND_NUMBER; ++i) {
         uint8_t random_public_key_bytes[CRYPTO_PUBLIC_KEY_SIZE];
@@ -2926,6 +2920,12 @@ static State_Load_Status dht_load_state_callback(void *outer, const uint8_t *dat
             // Copy to loaded_clients_list
             dht->loaded_nodes_list = (Node_format *)calloc(MAX_SAVED_DHT_NODES, sizeof(Node_format));
 
+            if (dht->loaded_nodes_list == nullptr) {
+                LOGGER_ERROR(dht->log, "could not allocate %u nodes", MAX_SAVED_DHT_NODES);
+                dht->loaded_num_nodes = 0;
+                break;
+            }
+
             const int num = unpack_nodes(dht->loaded_nodes_list, MAX_SAVED_DHT_NODES, nullptr, data, length, 0);
 
             if (num > 0) {
@@ -2938,7 +2938,7 @@ static State_Load_Status dht_load_state_callback(void *outer, const uint8_t *dat
         }
 
         default:
-            LOGGER_ERROR(dht->log, "Load state (DHT): contains unrecognized part (len %u, type %u)\n",
+            LOGGER_ERROR(dht->log, "Load state (DHT): contains unrecognized part (len %u, type %u)",
                          length, type);
             break;
     }
@@ -2976,8 +2976,8 @@ bool dht_isconnected(const DHT *dht)
     for (uint32_t i = 0; i < LCLIENT_LIST; ++i) {
         const Client_data *const client = &dht->close_clientlist[i];
 
-        if (!mono_time_is_timeout(dht->mono_time, client->assoc4.timestamp, BAD_NODE_TIMEOUT) ||
-                !mono_time_is_timeout(dht->mono_time, client->assoc6.timestamp, BAD_NODE_TIMEOUT)) {
+        if (!assoc_timeout(dht->mono_time, &client->assoc4) ||
+                !assoc_timeout(dht->mono_time, &client->assoc6)) {
             return true;
         }
     }
@@ -2993,12 +2993,12 @@ bool dht_non_lan_connected(const DHT *dht)
     for (uint32_t i = 0; i < LCLIENT_LIST; ++i) {
         const Client_data *const client = &dht->close_clientlist[i];
 
-        if (!mono_time_is_timeout(dht->mono_time, client->assoc4.timestamp, BAD_NODE_TIMEOUT)
+        if (!assoc_timeout(dht->mono_time, &client->assoc4)
                 && !ip_is_lan(client->assoc4.ip_port.ip)) {
             return true;
         }
 
-        if (!mono_time_is_timeout(dht->mono_time, client->assoc6.timestamp, BAD_NODE_TIMEOUT)
+        if (!assoc_timeout(dht->mono_time, &client->assoc6)
                 && !ip_is_lan(client->assoc6.ip_port.ip)) {
             return true;
         }

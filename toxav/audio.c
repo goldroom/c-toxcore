@@ -1,21 +1,6 @@
-/*
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
  * Copyright © 2013-2015 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -219,6 +204,10 @@ void ac_iterate(ACSession *ac)
 int ac_queue_message(Mono_Time *mono_time, void *acp, struct RTPMessage *msg)
 {
     if (!acp || !msg) {
+        if (msg) {
+            free(msg);
+        }
+
         return -1;
     }
 
@@ -370,7 +359,8 @@ static struct RTPMessage *jbuf_read(struct JitterBuffer *q, int32_t *success)
     *success = 0;
     return nullptr;
 }
-OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t sampling_rate, int32_t channel_count)
+static OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t sampling_rate,
+        int32_t channel_count)
 {
     int status = OPUS_OK;
     /*
@@ -393,7 +383,7 @@ OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t s
      * controlling the rate by adjusting the output buffer size.
      *
      * Parameters:
-     *   [in]    x   opus_int32: bitrate in bits per second.
+     *   `[in]`    `x`   `opus_int32`: bitrate in bits per second.
      */
     status = opus_encoder_ctl(rc, OPUS_SET_BITRATE(bit_rate));
 
@@ -408,7 +398,7 @@ OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t s
      * Note:
      *   This is only applicable to the LPC layer
      * Parameters:
-     *   [in]    x   int: FEC flag, 0 (disabled) is default
+     *   `[in]`    `x`   `int`: FEC flag, 0 (disabled) is default
      */
     /* Enable in-band forward error correction in codec */
     status = opus_encoder_ctl(rc, OPUS_SET_INBAND_FEC(1));
@@ -425,7 +415,7 @@ OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t s
      * the encoder at the expense of quality at a given bitrate in the lossless case,
      * but greater quality under loss.
      * Parameters:
-     *     [in]    x   int: Loss percentage in the range 0-100, inclusive.
+     *     `[in]`    `x`   `int`: Loss percentage in the range 0-100, inclusive.
      */
     /* Make codec resistant to up to 10% packet loss
      * NOTE This could also be adjusted on the fly, rather than hard-coded,
@@ -446,7 +436,7 @@ OpusEncoder *create_audio_encoder(const Logger *log, int32_t bit_rate, int32_t s
      * The default value is 10.
      *
      * Parameters:
-     *   [in]    x   int: 0-10, inclusive
+     *   `[in]`    `x`   `int`: 0-10, inclusive
      */
     /* Set algorithm to the highest complexity, maximizing compression */
     status = opus_encoder_ctl(rc, OPUS_SET_COMPLEXITY(AUDIO_OPUS_COMPLEXITY));
@@ -463,8 +453,8 @@ FAILURE:
     return nullptr;
 }
 
-bool reconfigure_audio_encoder(const Logger *log, OpusEncoder **e, int32_t new_br, int32_t new_sr, uint8_t new_ch,
-                               int32_t *old_br, int32_t *old_sr, int32_t *old_ch)
+static bool reconfigure_audio_encoder(const Logger *log, OpusEncoder **e, int32_t new_br, int32_t new_sr,
+                                      uint8_t new_ch, int32_t *old_br, int32_t *old_sr, int32_t *old_ch)
 {
     /* Values are checked in toxav.c */
     if (*old_sr != new_sr || *old_ch != new_ch) {
@@ -495,7 +485,7 @@ bool reconfigure_audio_encoder(const Logger *log, OpusEncoder **e, int32_t new_b
     return true;
 }
 
-bool reconfigure_audio_decoder(ACSession *ac, int32_t sampling_rate, int8_t channels)
+static bool reconfigure_audio_decoder(ACSession *ac, int32_t sampling_rate, int8_t channels)
 {
     if (sampling_rate != ac->ld_sample_rate || channels != ac->ld_channel_count) {
         if (current_time_monotonic(ac->mono_time) - ac->ldrts < 500) {

@@ -1,21 +1,6 @@
-/*
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
  * Copyright © 2013-2015 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -40,6 +25,23 @@
  * even though there are no free slots for incoming frames.
  */
 #define VIDEO_KEEP_KEYFRAME_IN_BUFFER_FOR_MS 15
+
+
+/*
+ * return -1 on failure, 0 on success
+ *
+ */
+static int rtp_send_custom_lossy_packet(Tox *tox, int32_t friendnumber, const uint8_t *data, uint32_t length)
+{
+    Tox_Err_Friend_Custom_Packet error;
+    tox_friend_send_lossy_packet(tox, friendnumber, data, (size_t)length, &error);
+
+    if (error == TOX_ERR_FRIEND_CUSTOM_PACKET_OK) {
+        return 0;
+    }
+
+    return -1;
+}
 
 // allocate_len is NOT including header!
 static struct RTPMessage *new_message(const struct RTPHeader *header, size_t allocate_len, const uint8_t *data,
@@ -271,7 +273,7 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
         struct RTPMessage *msg = (struct RTPMessage *)calloc(1, sizeof(struct RTPMessage) + header->data_length_full);
 
         if (msg == nullptr) {
-            LOGGER_ERROR(log, "Out of memory while trying to allocate for frame of size %u\n",
+            LOGGER_ERROR(log, "Out of memory while trying to allocate for frame of size %u",
                          (unsigned)header->data_length_full);
             // Out of memory: throw away the incoming data.
             return false;
@@ -334,9 +336,11 @@ static void update_bwc_values(const Logger *log, RTPSession *session, const stru
  * find out and handle it appropriately.
  *
  * @param session The current RTP session with:
+ *   <code>
  *   session->mcb == vc_queue_message() // this function is called from here
  *   session->mp == struct RTPMessage *
  *   session->cs == call->video.second // == VCSession created by vc_new() call
+ *   </code>
  * @param header The RTP header deserialised from the packet.
  * @param incoming_data The packet data *not* header, i.e. this is the actual
  *   payload.
@@ -639,7 +643,7 @@ size_t rtp_header_unpack(const uint8_t *data, struct RTPHeader *header)
     return p - data;
 }
 
-RTPSession *rtp_new(int payload_type, Messenger *m, uint32_t friendnumber,
+RTPSession *rtp_new(int payload_type, Messenger *m, Tox *tox, uint32_t friendnumber,
                     BWController *bwc, void *cs, rtp_m_cb *mcb)
 {
     assert(mcb != nullptr);
@@ -667,6 +671,7 @@ RTPSession *rtp_new(int payload_type, Messenger *m, uint32_t friendnumber,
     session->ssrc = payload_type == RTP_TYPE_VIDEO ? 0 : random_u32();
     session->payload_type = payload_type;
     session->m = m;
+    session->tox = tox;
     session->friend_number = friendnumber;
 
     // set NULL just in case
@@ -800,7 +805,7 @@ int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length,
         rtp_header_pack(rdata + 1, &header);
         memcpy(rdata + 1 + RTP_HEADER_SIZE, data, length);
 
-        if (-1 == m_send_custom_lossy_packet(session->m, session->friend_number, rdata, SIZEOF_VLA(rdata))) {
+        if (-1 == rtp_send_custom_lossy_packet(session->tox, session->friend_number, rdata, SIZEOF_VLA(rdata))) {
             const char *netstrerror = net_new_strerror(net_error());
             LOGGER_WARNING(session->m->log, "RTP send failed (len: %u)! std error: %s, net error: %s",
                            (unsigned)SIZEOF_VLA(rdata), strerror(errno), netstrerror);
@@ -818,8 +823,8 @@ int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length,
             rtp_header_pack(rdata + 1, &header);
             memcpy(rdata + 1 + RTP_HEADER_SIZE, data + sent, piece);
 
-            if (-1 == m_send_custom_lossy_packet(session->m, session->friend_number,
-                                                 rdata, piece + RTP_HEADER_SIZE + 1)) {
+            if (-1 == rtp_send_custom_lossy_packet(session->tox, session->friend_number,
+                                                   rdata, piece + RTP_HEADER_SIZE + 1)) {
                 const char *netstrerror = net_new_strerror(net_error());
                 LOGGER_WARNING(session->m->log, "RTP send failed (len: %d)! std error: %s, net error: %s",
                                piece + RTP_HEADER_SIZE + 1, strerror(errno), netstrerror);
@@ -838,8 +843,8 @@ int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length,
             rtp_header_pack(rdata + 1, &header);
             memcpy(rdata + 1 + RTP_HEADER_SIZE, data + sent, piece);
 
-            if (-1 == m_send_custom_lossy_packet(session->m, session->friend_number, rdata,
-                                                 piece + RTP_HEADER_SIZE + 1)) {
+            if (-1 == rtp_send_custom_lossy_packet(session->tox, session->friend_number, rdata,
+                                                   piece + RTP_HEADER_SIZE + 1)) {
                 const char *netstrerror = net_new_strerror(net_error());
                 LOGGER_WARNING(session->m->log, "RTP send failed (len: %d)! std error: %s, net error: %s",
                                piece + RTP_HEADER_SIZE + 1, strerror(errno), netstrerror);

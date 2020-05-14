@@ -3,7 +3,7 @@ version: 2
 
 workflows:
   version: 2
-  build_linux:
+  clang-sanitizers:
     jobs:
       - asan
       - tsan
@@ -17,8 +17,9 @@ jobs:
     steps:
       - checkout
       - run: &apt_install
-          apt update &&
-          apt install -y --no-install-recommends
+          apt-get update &&
+          DEBIAN_FRONTEND=noninteractive
+          apt-get install -y --no-install-recommends
             clang
             cmake
             libconfig-dev
@@ -26,6 +27,7 @@ jobs:
             libopus-dev
             libsodium-dev
             libvpx-dev
+            llvm-dev
             ninja-build
             pkg-config
       - run: CC=clang .circleci/cmake-asan

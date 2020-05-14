@@ -1,21 +1,6 @@
-/*
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
  * Copyright © 2013-2015 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -36,7 +21,7 @@
 /**
  * Protocol:
  *
- * |id [1 byte]| |size [1 byte]| |data [$size bytes]| |...{repeat}| |0 {end byte}|
+ * `|id [1 byte]| |size [1 byte]| |data [$size bytes]| |...{repeat}| |0 {end byte}|`
  */
 
 typedef enum MSIHeaderID {
@@ -76,20 +61,21 @@ typedef struct MSIMessage {
 } MSIMessage;
 
 
-void msg_init(MSIMessage *dest, MSIRequest request);
-int msg_parse_in(const Logger *log, MSIMessage *dest, const uint8_t *data, uint16_t length);
-uint8_t *msg_parse_header_out(MSIHeaderID id, uint8_t *dest, const void *value, uint8_t value_len, uint16_t *length);
+static void msg_init(MSIMessage *dest, MSIRequest request);
+static int msg_parse_in(const Logger *log, MSIMessage *dest, const uint8_t *data, uint16_t length);
+static uint8_t *msg_parse_header_out(MSIHeaderID id, uint8_t *dest, const void *value, uint8_t value_len,
+                                     uint16_t *length);
 static int send_message(Messenger *m, uint32_t friend_number, const MSIMessage *msg);
-int send_error(Messenger *m, uint32_t friend_number, MSIError error);
+static int send_error(Messenger *m, uint32_t friend_number, MSIError error);
 static int invoke_callback(MSICall *call, MSICallbackID cb);
 static MSICall *get_call(MSISession *session, uint32_t friend_number);
-MSICall *new_call(MSISession *session, uint32_t friend_number);
-void kill_call(MSICall *call);
-void on_peer_status(Messenger *m, uint32_t friend_number, uint8_t status, void *data);
-void handle_init(MSICall *call, const MSIMessage *msg);
-void handle_push(MSICall *call, const MSIMessage *msg);
-void handle_pop(MSICall *call, const MSIMessage *msg);
-void handle_msi_packet(Messenger *m, uint32_t friend_number, const uint8_t *data, uint16_t length, void *object);
+static MSICall *new_call(MSISession *session, uint32_t friend_number);
+static void kill_call(MSICall *call);
+static void on_peer_status(Messenger *m, uint32_t friend_number, uint8_t status, void *data);
+static void handle_init(MSICall *call, const MSIMessage *msg);
+static void handle_push(MSICall *call, const MSIMessage *msg);
+static void handle_pop(MSICall *call, const MSIMessage *msg);
+static void handle_msi_packet(Messenger *m, uint32_t friend_number, const uint8_t *data, uint16_t length, void *object);
 
 
 /**
@@ -323,13 +309,13 @@ int msi_change_capabilities(MSICall *call, uint8_t capabilities)
 /**
  * Private functions
  */
-void msg_init(MSIMessage *dest, MSIRequest request)
+static void msg_init(MSIMessage *dest, MSIRequest request)
 {
     memset(dest, 0, sizeof(*dest));
     dest->request.exists = true;
     dest->request.value = request;
 }
-int msg_parse_in(const Logger *log, MSIMessage *dest, const uint8_t *data, uint16_t length)
+static int msg_parse_in(const Logger *log, MSIMessage *dest, const uint8_t *data, uint16_t length)
 {
     /* Parse raw data received from socket into MSIMessage struct */
 
@@ -408,7 +394,8 @@ int msg_parse_in(const Logger *log, MSIMessage *dest, const uint8_t *data, uint1
 
     return 0;
 }
-uint8_t *msg_parse_header_out(MSIHeaderID id, uint8_t *dest, const void *value, uint8_t value_len, uint16_t *length)
+static uint8_t *msg_parse_header_out(MSIHeaderID id, uint8_t *dest, const void *value, uint8_t value_len,
+                                     uint16_t *length)
 {
     /* Parse a single header for sending */
     assert(dest);
@@ -426,7 +413,7 @@ uint8_t *msg_parse_header_out(MSIHeaderID id, uint8_t *dest, const void *value, 
 
     return dest + value_len; /* Set to next position ready to be written */
 }
-int send_message(Messenger *m, uint32_t friend_number, const MSIMessage *msg)
+static int send_message(Messenger *m, uint32_t friend_number, const MSIMessage *msg)
 {
     /* Parse and send message */
     assert(m);
@@ -471,7 +458,7 @@ int send_message(Messenger *m, uint32_t friend_number, const MSIMessage *msg)
 
     return -1;
 }
-int send_error(Messenger *m, uint32_t friend_number, MSIError error)
+static int send_error(Messenger *m, uint32_t friend_number, MSIError error)
 {
     /* Send error message */
     assert(m);
@@ -487,7 +474,7 @@ int send_error(Messenger *m, uint32_t friend_number, MSIError error)
     send_message(m, friend_number, &msg);
     return 0;
 }
-int invoke_callback(MSICall *call, MSICallbackID cb)
+static int invoke_callback(MSICall *call, MSICallbackID cb)
 {
     assert(call);
 
@@ -524,7 +511,7 @@ static MSICall *get_call(MSISession *session, uint32_t friend_number)
 
     return session->calls[friend_number];
 }
-MSICall *new_call(MSISession *session, uint32_t friend_number)
+static MSICall *new_call(MSISession *session, uint32_t friend_number)
 {
     assert(session);
 
@@ -577,7 +564,7 @@ MSICall *new_call(MSISession *session, uint32_t friend_number)
     session->calls[friend_number] = rc;
     return rc;
 }
-void kill_call(MSICall *call)
+static void kill_call(MSICall *call)
 {
     /* Assume that session mutex is locked */
     if (call == nullptr) {
@@ -618,7 +605,7 @@ CLEAR_CONTAINER:
     free(call);
     session->calls = nullptr;
 }
-void on_peer_status(Messenger *m, uint32_t friend_number, uint8_t status, void *data)
+static void on_peer_status(Messenger *m, uint32_t friend_number, uint8_t status, void *data)
 {
     MSISession *session = (MSISession *)data;
 
@@ -644,7 +631,7 @@ void on_peer_status(Messenger *m, uint32_t friend_number, uint8_t status, void *
             break;
     }
 }
-void handle_init(MSICall *call, const MSIMessage *msg)
+static void handle_init(MSICall *call, const MSIMessage *msg)
 {
     assert(call);
     LOGGER_DEBUG(call->session->messenger->log,
@@ -705,7 +692,7 @@ FAILURE:
     send_error(call->session->messenger, call->friend_number, call->error);
     kill_call(call);
 }
-void handle_push(MSICall *call, const MSIMessage *msg)
+static void handle_push(MSICall *call, const MSIMessage *msg)
 {
     assert(call);
 
@@ -760,7 +747,7 @@ FAILURE:
     send_error(call->session->messenger, call->friend_number, call->error);
     kill_call(call);
 }
-void handle_pop(MSICall *call, const MSIMessage *msg)
+static void handle_pop(MSICall *call, const MSIMessage *msg)
 {
     assert(call);
 
@@ -805,7 +792,7 @@ void handle_pop(MSICall *call, const MSIMessage *msg)
 
     kill_call(call);
 }
-void handle_msi_packet(Messenger *m, uint32_t friend_number, const uint8_t *data, uint16_t length, void *object)
+static void handle_msi_packet(Messenger *m, uint32_t friend_number, const uint8_t *data, uint16_t length, void *object)
 {
     LOGGER_DEBUG(m->log, "Got msi message");
 

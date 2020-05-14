@@ -1,25 +1,10 @@
-/*
- * Connection to friends.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2014 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2014 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Connection to friends.
  */
 #ifndef C_TOXCORE_TOXCORE_FRIEND_CONNECTION_H
 #define C_TOXCORE_TOXCORE_FRIEND_CONNECTION_H
@@ -58,7 +43,7 @@
 typedef enum Friendconn_Status {
     FRIENDCONN_STATUS_NONE,
     FRIENDCONN_STATUS_CONNECTING,
-    FRIENDCONN_STATUS_CONNECTED
+    FRIENDCONN_STATUS_CONNECTED,
 } Friendconn_Status;
 
 typedef struct Friend_Connections Friend_Connections;
@@ -163,7 +148,7 @@ typedef int fr_request_cb(void *object, const uint8_t *source_pubkey, const uint
 void set_friend_request_callback(Friend_Connections *fr_c, fr_request_cb *fr_request_callback, void *object);
 
 /* Create new friend_connections instance. */
-Friend_Connections *new_friend_connections(const Mono_Time *mono_time, Onion_Client *onion_c,
+Friend_Connections *new_friend_connections(const Logger *logger, const Mono_Time *mono_time, Onion_Client *onion_c,
         bool local_discovery_enabled);
 
 /* main friend_connections loop. */

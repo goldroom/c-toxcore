@@ -32,6 +32,7 @@ libtoxcore_la_SOURCES = ../toxcore/ccompat.h \
                         ../toxcore/state.h \
                         ../toxcore/state.c \
                         ../toxcore/tox.h \
+                        ../toxcore/tox_private.h \
                         ../toxcore/tox.c \
                         ../toxcore/tox_api.c \
                         ../toxcore/util.h \
@@ -71,7 +72,7 @@ libtoxcore_la_LDFLAGS = $(LT_LDFLAGS) \
 
 libtoxcore_la_LIBADD =  $(LIBSODIUM_LIBS) \
                         $(NACL_OBJECTS) \
-                        $(NAC_LIBS) \
+                        $(NACL_LIBS) \
                         $(PTHREAD_LIBS)
 
 if SET_SO_VERSION

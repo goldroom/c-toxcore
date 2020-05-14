@@ -1,18 +1,16 @@
 ---
 cirrus-ci_task:
   container:
-    image: l.gcr.io/google/bazel:2.2.0
-    cpu: 8
-    memory: 12G
+    image: toxchat/toktok-stack:0.0.10
+    cpu: 2
+    memory: 2G
   configure_script:
-    - echo "build --jobs=50 --curses=no --verbose_failures" | tee ~/.bazelrc
-    - echo "build --config=linux" | tee -a ~/.bazelrc
-    - echo "build --config=clang" | tee -a ~/.bazelrc
-#    - echo "build --config=remote" | tee -a ~/.bazelrc
-    - cd .. && mv cirrus-ci-build c-toxcore
-    - git clone --branch=upgrade-bazel --depth=1 https://github.com/iphydf/toktok-stack cirrus-ci-build
-    - mv c-toxcore cirrus-ci-build
-    - cd -
-    - bazel version
+    - /src/workspace/tools/inject-repo c-toxcore
   test_all_script:
-    - bazel test --copt=-DUSE_IPV6=0 -c opt -k //c-toxcore/...
+    - bazel test -k
+      --build_tag_filters=-haskell
+      --test_tag_filters=-haskell
+      --remote_download_minimal
+      --config=ci
+      --config=release
+      //c-toxcore/...

@@ -1,21 +1,6 @@
-/*
+/* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
  * Copyright © 2013-2015 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef C_TOXCORE_TOXAV_RTP_H
 #define C_TOXCORE_TOXAV_RTP_H
@@ -30,6 +15,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#ifndef TOX_DEFINED
+#define TOX_DEFINED
+typedef struct Tox Tox;
+#endif /* TOX_DEFINED */
 
 /**
  * RTPHeader serialised size in bytes.
@@ -137,7 +127,7 @@ struct RTPMessage {
 struct RTPWorkBuffer {
     /**
      * Whether this slot contains a key frame. This is true iff
-     * buf->header.flags & RTP_KEY_FRAME.
+     * `buf->header.flags & RTP_KEY_FRAME`.
      */
     bool is_keyframe;
     /**
@@ -174,6 +164,7 @@ typedef struct RTPSession {
     struct RTPWorkBufferList *work_buffer_list;
     uint8_t  first_packets_counter; /* dismiss first few lost video packets */
     Messenger *m;
+    Tox *tox;
     uint32_t friend_number;
     BWController *bwc;
     void *cs;
@@ -199,7 +190,7 @@ size_t rtp_header_pack(uint8_t *rdata, const struct RTPHeader *header);
  */
 size_t rtp_header_unpack(const uint8_t *data, struct RTPHeader *header);
 
-RTPSession *rtp_new(int payload_type, Messenger *m, uint32_t friendnumber,
+RTPSession *rtp_new(int payload_type, Messenger *m, Tox *tox, uint32_t friendnumber,
                     BWController *bwc, void *cs, rtp_m_cb *mcb);
 void rtp_kill(RTPSession *session);
 int rtp_allow_receiving(RTPSession *session);

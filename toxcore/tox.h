@@ -1,25 +1,10 @@
-/*
- * The Tox public API.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2013 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2013 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * The Tox public API.
  */
 #ifndef C_TOXCORE_TOXCORE_TOX_H
 #define C_TOXCORE_TOXCORE_TOX_H
@@ -27,6 +12,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+//!TOKSTYLE-
 
 #ifdef __cplusplus
 extern "C" {
@@ -183,7 +170,7 @@ uint32_t tox_version_minor(void);
  * The patch or revision number. Incremented when bugfixes are applied without
  * changing any functionality or API or ABI.
  */
-#define TOX_VERSION_PATCH              10
+#define TOX_VERSION_PATCH              12
 
 uint32_t tox_version_patch(void);
 
@@ -2556,7 +2543,7 @@ typedef enum TOX_ERR_CONFERENCE_NEW {
 /**
  * Creates a new conference.
  *
- * This function creates a new text conference.
+ * This function creates and connects to a new text conference.
  *
  * @return conference number on success, or an unspecified value on failure.
  */
@@ -2615,7 +2602,10 @@ typedef enum TOX_ERR_CONFERENCE_PEER_QUERY {
 
 
 /**
- * Return the number of peers in the conference. Return value is unspecified on failure.
+ * Return the number of online peers in the conference. The unsigned
+ * integers less than this number are the valid values of peer_number for
+ * the functions querying these peers. Return value is unspecified on
+ * failure.
  */
 uint32_t tox_conference_peer_count(const Tox *tox, uint32_t conference_number, TOX_ERR_CONFERENCE_PEER_QUERY *error);
 
@@ -2653,7 +2643,9 @@ bool tox_conference_peer_number_is_ours(const Tox *tox, uint32_t conference_numb
                                         TOX_ERR_CONFERENCE_PEER_QUERY *error);
 
 /**
- * Return the number of offline peers in the conference. Return value is unspecified on failure.
+ * Return the number of offline peers in the conference. The unsigned
+ * integers less than this number are the valid values of offline_peer_number for
+ * the functions querying these peers. Return value is unspecified on failure.
  */
 uint32_t tox_conference_offline_peer_count(const Tox *tox, uint32_t conference_number,
         TOX_ERR_CONFERENCE_PEER_QUERY *error);
@@ -2740,10 +2732,6 @@ typedef enum TOX_ERR_CONFERENCE_INVITE {
 /**
  * Invites a friend to a conference.
  *
- * We must be connected to the conference, meaning that the conference has not
- * been deleted, and either we created the conference with the tox_conference_new function,
- * or a `conference_connected` event has occurred for the conference.
- *
  * @param friend_number The friend number of the friend we want to invite.
  * @param conference_number The conference number of the conference we want to invite the friend to.
  *
@@ -2794,6 +2782,14 @@ typedef enum TOX_ERR_CONFERENCE_JOIN {
 
 /**
  * Joins a conference that the client has been invited to.
+ *
+ * After successfully joining the conference, the client will not be "connected"
+ * to it until a handshaking procedure has been completed. A
+ * `conference_connected` event will then occur for the conference. The client
+ * will then remain connected to the conference until the conference is deleted,
+ * even across core restarts. Many operations on a conference will fail with a
+ * corresponding error if attempted on a conference to which the client is not
+ * yet connected.
  *
  * @param friend_number The friend number of the friend who sent the invite.
  * @param cookie Received via the `conference_invite` event.
@@ -2921,8 +2917,16 @@ bool tox_conference_set_title(Tox *tox, uint32_t conference_number, const uint8_
 size_t tox_conference_get_chatlist_size(const Tox *tox);
 
 /**
- * Copy a list of valid conference IDs into the array chatlist. Determine how much space
- * to allocate for the array with the `tox_conference_get_chatlist_size` function.
+ * Copy a list of valid conference numbers into the array chatlist. Determine
+ * how much space to allocate for the array with the `tox_conference_get_chatlist_size` function.
+ *
+ * Note that `tox_get_savedata` saves all connected conferences;
+ * when toxcore is created from savedata in which conferences were saved, those
+ * conferences will be connected at startup, and will be listed by
+ * `tox_conference_get_chatlist`.
+ *
+ * The conference number of a loaded conference may differ from the conference
+ * number it had when it was saved.
  */
 void tox_conference_get_chatlist(const Tox *tox, uint32_t *chatlist);
 
@@ -3063,7 +3067,7 @@ typedef enum TOX_ERR_FRIEND_CUSTOM_PACKET {
 
     /**
      * The first byte of data was not in the specified range for the packet type.
-     * This range is 200-254 for lossy, and 160-191 for lossless packets.
+     * This range is 192-254 for lossy, and 69, 160-191 for lossless packets.
      */
     TOX_ERR_FRIEND_CUSTOM_PACKET_INVALID,
 
@@ -3088,7 +3092,7 @@ typedef enum TOX_ERR_FRIEND_CUSTOM_PACKET {
 /**
  * Send a custom lossy packet to a friend.
  *
- * The first byte of data must be in the range 200-254. Maximum length of a
+ * The first byte of data must be in the range 192-254. Maximum length of a
  * custom packet is TOX_MAX_CUSTOM_PACKET_SIZE.
  *
  * Lossy packets behave like UDP packets, meaning they might never reach the
@@ -3111,7 +3115,7 @@ bool tox_friend_send_lossy_packet(Tox *tox, uint32_t friend_number, const uint8_
 /**
  * Send a custom lossless packet to a friend.
  *
- * The first byte of data must be in the range 160-191. Maximum length of a
+ * The first byte of data must be in the range 69, 160-191. Maximum length of a
  * custom packet is TOX_MAX_CUSTOM_PACKET_SIZE.
  *
  * Lossless packet behaviour is comparable to TCP (reliability, arrive in order)
@@ -3166,20 +3170,6 @@ void tox_callback_friend_lossless_packet(Tox *tox, tox_friend_lossless_packet_cb
 
 
 
-/**
- * Writes the temporary DHT public key of this instance to a byte array.
- *
- * This can be used in combination with an externally accessible IP address and
- * the bound port (from tox_self_get_udp_port) to run a temporary bootstrap node.
- *
- * Be aware that every time a new instance is created, the DHT public key
- * changes, meaning this cannot be used to run a permanent bootstrap node.
- *
- * @param dht_id A memory region of at least TOX_PUBLIC_KEY_SIZE bytes. If this
- *   parameter is NULL, this function has no effect.
- */
-void tox_self_get_dht_id(const Tox *tox, uint8_t *dht_id);
-
 typedef enum TOX_ERR_GET_PORT {
 
     /**
@@ -3194,6 +3184,20 @@ typedef enum TOX_ERR_GET_PORT {
 
 } TOX_ERR_GET_PORT;
 
+
+/**
+ * Writes the temporary DHT public key of this instance to a byte array.
+ *
+ * This can be used in combination with an externally accessible IP address and
+ * the bound port (from tox_self_get_udp_port) to run a temporary bootstrap node.
+ *
+ * Be aware that every time a new instance is created, the DHT public key
+ * changes, meaning this cannot be used to run a permanent bootstrap node.
+ *
+ * @param dht_id A memory region of at least TOX_PUBLIC_KEY_SIZE bytes. If this
+ *   parameter is NULL, this function has no effect.
+ */
+void tox_self_get_dht_id(const Tox *tox, uint8_t *dht_id);
 
 /**
  * Return the UDP port this Tox instance is bound to.
@@ -3248,5 +3252,7 @@ typedef TOX_LOG_LEVEL Tox_Log_Level;
 typedef TOX_CONNECTION Tox_Connection;
 typedef TOX_FILE_CONTROL Tox_File_Control;
 typedef TOX_CONFERENCE_TYPE Tox_Conference_Type;
+
+//!TOKSTYLE+
 
 #endif // C_TOXCORE_TOXCORE_TOX_H

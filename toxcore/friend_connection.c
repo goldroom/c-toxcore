@@ -1,25 +1,10 @@
-/*
- * Connection to friends.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2014 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2014 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Connection to friends.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -27,7 +12,6 @@
 
 #include "friend_connection.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -75,6 +59,7 @@ typedef struct Friend_Conn {
 
 struct Friend_Connections {
     const Mono_Time *mono_time;
+    const Logger *logger;
     Net_Crypto *net_crypto;
     DHT *dht;
     Onion_Client *onion_c;
@@ -363,7 +348,7 @@ static void change_dht_pk(Friend_Connections *fr_c, int friendcon_id, const uint
 
     if (friend_con->dht_lock) {
         if (dht_delfriend(fr_c->dht, friend_con->dht_temp_pk, friend_con->dht_lock) != 0) {
-            printf("a. Could not delete dht peer. Please report this.\n");
+            LOGGER_ERROR(fr_c->logger, "a. Could not delete dht peer. Please report this.");
             return;
         }
 
@@ -863,7 +848,7 @@ int send_friend_request_packet(Friend_Connections *fr_c, int friendcon_id, uint3
 }
 
 /* Create new friend_connections instance. */
-Friend_Connections *new_friend_connections(const Mono_Time *mono_time, Onion_Client *onion_c,
+Friend_Connections *new_friend_connections(const Logger *logger, const Mono_Time *mono_time, Onion_Client *onion_c,
         bool local_discovery_enabled)
 {
     if (onion_c == nullptr) {
@@ -877,6 +862,7 @@ Friend_Connections *new_friend_connections(const Mono_Time *mono_time, Onion_Cli
     }
 
     temp->mono_time = mono_time;
+    temp->logger = logger;
     temp->dht = onion_get_dht(onion_c);
     temp->net_crypto = onion_get_net_crypto(onion_c);
     temp->onion_c = onion_c;

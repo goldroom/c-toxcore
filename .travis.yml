@@ -19,10 +19,11 @@ jobs:
           packages:
             - libconfig-dev          # For tox-bootstrapd.
             - libopus-dev            # For toxav.
+            - libsodium-dev          # For toxcore.
             - libgtest-dev           # For unit tests.
             - libvpx-dev             # For toxav.
             - ninja-build
-            - pylint
+            - pylint3
       install:       .travis/$JOB install
       script:        .travis/$JOB script
       after_script:  .travis/upload-coverage
@@ -38,22 +39,9 @@ jobs:
       install:       .travis/$JOB install
       script:        .travis/$JOB script
     - stage: "Stage 1"
-      env: JOB=bazel-linux
-      compiler: clang
-      before_install:
-        # Clear bazel installation.
-        - rm -rf $HOME/.cache/bazel/_bazel_$USER/install
-        # Get toktok-stack, which contains the bazel workspace.
-        - cd ..
-        - git clone --depth=1 --branch=upgrade-bazel https://github.com/iphydf/toktok-stack
-        - rm -rf toktok-stack/c-toxcore
-        - mv c-toxcore toktok-stack/
-        - cd toktok-stack/c-toxcore
-      install:       .travis/$JOB install
-      script:        .travis/$JOB script
-      before_cache:
-        # Clear bazel installation.
-        - rm -rf $HOME/.cache/bazel/_bazel_$USER/install
+      env: JOB=tox-bootstrapd-docker
+      services: [docker]
+      script:        .travis/$JOB
     - stage: "Stage 1"
       if: type IN (push, api, cron)
       env: JOB=cmake-win32
@@ -77,11 +65,6 @@ jobs:
       os: osx
       install:       .travis/$JOB install
       script:        .travis/$JOB script
-    - stage: "Stage 1"
-      if: type IN (push, api, cron)
-      env: JOB=tox-bootstrapd-docker
-      services: [docker]
-      script:        .travis/$JOB
     - stage: "Stage 2"
       if: type IN (push, api, cron)
       env: JOB=cmake-freebsd
@@ -91,7 +74,6 @@ jobs:
 
 cache:
   directories:
-    - $HOME/.cache/bazel
     - $HOME/cache
     - /opt/freebsd/cache
 
@@ -102,3 +84,7 @@ notifications:
     template:
       - "%{result} %{repository_name} %{build_url}"
       - "#%{build_number} changes: %{compare_url}"
+
+# Only build pull requests and releases, don't build master on pushes,
+# except through api or cron.
+if: type IN (pull_request, api, cron) OR tag IS present

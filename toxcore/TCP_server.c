@@ -1,25 +1,10 @@
-/*
- * Implementation of the TCP relay server part of Tox.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2014 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2014 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Implementation of the TCP relay server part of Tox.
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -27,7 +12,6 @@
 
 #include "TCP_server.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #if !defined(_WIN32) && !defined(__WIN32__) && !defined (WIN32)
@@ -81,6 +65,7 @@ typedef struct TCP_Secure_Connection {
 
 
 struct TCP_Server {
+    const Logger *logger;
     Onion *onion;
 
 #ifdef TCP_SERVER_USE_EPOLL
@@ -235,7 +220,7 @@ static int add_accepted(TCP_Server *tcp_server, const Mono_Time *mono_time, TCP_
     }
 
     if (index == -1) {
-        fprintf(stderr, "FAIL index is -1\n");
+        LOGGER_ERROR(tcp_server->logger, "FAIL index is -1");
         return -1;
     }
 
@@ -288,9 +273,9 @@ static int del_accepted(TCP_Server *tcp_server, int index)
  *
  * return length on success
  * return 0 if nothing has been read from socket.
- * return ~0 on failure.
+ * return -1 on failure.
  */
-uint16_t read_TCP_length(Socket sock)
+uint16_t read_TCP_length(const Logger *logger, Socket sock)
 {
     const unsigned int count = net_socket_data_recv_buffer(sock);
 
@@ -299,14 +284,14 @@ uint16_t read_TCP_length(Socket sock)
         const int len = net_recv(sock, &length, sizeof(uint16_t));
 
         if (len != sizeof(uint16_t)) {
-            fprintf(stderr, "FAIL recv packet\n");
+            LOGGER_ERROR(logger, "FAIL recv packet");
             return 0;
         }
 
         length = net_ntohs(length);
 
         if (length > MAX_PACKET_SIZE) {
-            return ~0;
+            return -1;
         }
 
         return length;
@@ -320,7 +305,7 @@ uint16_t read_TCP_length(Socket sock)
  * return length on success
  * return -1 on failure/no data in buffer.
  */
-int read_TCP_packet(Socket sock, uint8_t *data, uint16_t length)
+int read_TCP_packet(const Logger *logger, Socket sock, uint8_t *data, uint16_t length)
 {
     unsigned int count = net_socket_data_recv_buffer(sock);
 
@@ -328,7 +313,7 @@ int read_TCP_packet(Socket sock, uint8_t *data, uint16_t length)
         const int len = net_recv(sock, data, length);
 
         if (len != length) {
-            fprintf(stderr, "FAIL recv packet\n");
+            LOGGER_ERROR(logger, "FAIL recv packet");
             return -1;
         }
 
@@ -342,13 +327,13 @@ int read_TCP_packet(Socket sock, uint8_t *data, uint16_t length)
  * return 0 if could not read any packet.
  * return -1 on failure (connection must be killed).
  */
-int read_packet_TCP_secure_connection(Socket sock, uint16_t *next_packet_length, const uint8_t *shared_key,
-                                      uint8_t *recv_nonce, uint8_t *data, uint16_t max_len)
+int read_packet_TCP_secure_connection(const Logger *logger, Socket sock, uint16_t *next_packet_length,
+                                      const uint8_t *shared_key, uint8_t *recv_nonce, uint8_t *data, uint16_t max_len)
 {
     if (*next_packet_length == 0) {
-        uint16_t len = read_TCP_length(sock);
+        uint16_t len = read_TCP_length(logger, sock);
 
-        if (len == (uint16_t)~0) {
+        if (len == (uint16_t) -1) {
             return -1;
         }
 
@@ -364,7 +349,7 @@ int read_packet_TCP_secure_connection(Socket sock, uint16_t *next_packet_length,
     }
 
     VLA(uint8_t, data_encrypted, *next_packet_length);
-    int len_packet = read_TCP_packet(sock, data_encrypted, *next_packet_length);
+    int len_packet = read_TCP_packet(logger, sock, data_encrypted, *next_packet_length);
 
     if (len_packet != *next_packet_length) {
         return 0;
@@ -632,10 +617,10 @@ static int handle_TCP_handshake(TCP_Secure_Connection *con, const uint8_t *data,
  * return 0 if we didn't get it yet.
  * return -1 if the connection must be killed.
  */
-static int read_connection_handshake(TCP_Secure_Connection *con, const uint8_t *self_secret_key)
+static int read_connection_handshake(const Logger *logger, TCP_Secure_Connection *con, const uint8_t *self_secret_key)
 {
     uint8_t data[TCP_CLIENT_HANDSHAKE_SIZE];
-    const int len = read_TCP_packet(con->sock, data, TCP_CLIENT_HANDSHAKE_SIZE);
+    const int len = read_TCP_packet(logger, con->sock, data, TCP_CLIENT_HANDSHAKE_SIZE);
 
     if (len != -1) {
         return handle_TCP_handshake(con, data, len, self_secret_key);
@@ -684,7 +669,7 @@ static int send_disconnect_notification(TCP_Secure_Connection *con, uint8_t id)
 static int handle_TCP_routing_req(TCP_Server *tcp_server, uint32_t con_id, const uint8_t *public_key)
 {
     uint32_t i;
-    uint32_t index = ~0;
+    uint32_t index = -1;
     TCP_Secure_Connection *con = &tcp_server->accepted_connection_array[con_id];
 
     /* If person tries to cennect to himself we deny the request*/
@@ -705,12 +690,12 @@ static int handle_TCP_routing_req(TCP_Server *tcp_server, uint32_t con_id, const
 
                 return 0;
             }
-        } else if (index == (uint32_t)~0) {
+        } else if (index == (uint32_t) -1) {
             index = i;
         }
     }
 
-    if (index == (uint32_t)~0) {
+    if (index == (uint32_t) -1) {
         if (send_routing_response(con, 0, public_key) == -1) {
             return -1;
         }
@@ -733,7 +718,7 @@ static int handle_TCP_routing_req(TCP_Server *tcp_server, uint32_t con_id, const
     int other_index = get_TCP_connection_index(tcp_server, public_key);
 
     if (other_index != -1) {
-        uint32_t other_id = ~0;
+        uint32_t other_id = -1;
         TCP_Secure_Connection *other_conn = &tcp_server->accepted_connection_array[other_index];
 
         for (i = 0; i < NUM_CLIENT_CONNECTIONS; ++i) {
@@ -744,7 +729,7 @@ static int handle_TCP_routing_req(TCP_Server *tcp_server, uint32_t con_id, const
             }
         }
 
-        if (other_id != (uint32_t)~0) {
+        if (other_id != (uint32_t) -1) {
             con->connections[index].status = 2;
             con->connections[index].index = other_index;
             con->connections[index].other_id = other_id;
@@ -1070,8 +1055,8 @@ static Socket new_listening_TCP_socket(Family family, uint16_t port)
     return sock;
 }
 
-TCP_Server *new_TCP_server(uint8_t ipv6_enabled, uint16_t num_sockets, const uint16_t *ports, const uint8_t *secret_key,
-                           Onion *onion)
+TCP_Server *new_TCP_server(const Logger *logger, uint8_t ipv6_enabled, uint16_t num_sockets, const uint16_t *ports,
+                           const uint8_t *secret_key, Onion *onion)
 {
     if (num_sockets == 0 || ports == nullptr) {
         return nullptr;
@@ -1086,6 +1071,8 @@ TCP_Server *new_TCP_server(uint8_t ipv6_enabled, uint16_t num_sockets, const uin
     if (temp == nullptr) {
         return nullptr;
     }
+
+    temp->logger = logger;
 
     temp->socks_listening = (Socket *)calloc(num_sockets, sizeof(Socket));
 
@@ -1171,7 +1158,8 @@ static int do_incoming(TCP_Server *tcp_server, uint32_t i)
         return -1;
     }
 
-    int ret = read_connection_handshake(&tcp_server->incoming_connection_queue[i], tcp_server->secret_key);
+    int ret = read_connection_handshake(tcp_server->logger, &tcp_server->incoming_connection_queue[i],
+                                        tcp_server->secret_key);
 
     if (ret == -1) {
         kill_TCP_secure_connection(&tcp_server->incoming_connection_queue[i]);
@@ -1202,8 +1190,8 @@ static int do_unconfirmed(TCP_Server *tcp_server, const Mono_Time *mono_time, ui
     }
 
     uint8_t packet[MAX_PACKET_SIZE];
-    int len = read_packet_TCP_secure_connection(conn->sock, &conn->next_packet_length, conn->shared_key, conn->recv_nonce,
-              packet, sizeof(packet));
+    int len = read_packet_TCP_secure_connection(tcp_server->logger, conn->sock, &conn->next_packet_length, conn->shared_key,
+              conn->recv_nonce, packet, sizeof(packet));
 
     if (len == 0) {
         return -1;
@@ -1222,7 +1210,7 @@ static bool tcp_process_secure_packet(TCP_Server *tcp_server, uint32_t i)
     TCP_Secure_Connection *const conn = &tcp_server->accepted_connection_array[i];
 
     uint8_t packet[MAX_PACKET_SIZE];
-    int len = read_packet_TCP_secure_connection(conn->sock, &conn->next_packet_length, conn->shared_key,
+    int len = read_packet_TCP_secure_connection(tcp_server->logger, conn->sock, &conn->next_packet_length, conn->shared_key,
               conn->recv_nonce, packet, sizeof(packet));
 
     if (len == 0) {

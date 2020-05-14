@@ -1,25 +1,10 @@
-/*
- * Functions for the core crypto.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2013 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2013 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Functions for the core crypto.
  */
 #ifndef C_TOXCORE_TOXCORE_CRYPTO_CORE_H
 #define C_TOXCORE_TOXCORE_CRYPTO_CORE_H
@@ -98,7 +83,7 @@ uint32_t crypto_sha512_size(void);
  * "aaaa" and "baaa" also takes 4 time. With a regular `memcmp`, the latter may
  * take 1 time, because it immediately knows that the two strings are not equal.
  */
-int32_t crypto_memcmp(const void *p1, const void *p2, size_t length);
+int32_t crypto_memcmp(const uint8_t *p1, const uint8_t *p2, size_t length);
 
 /**
  * A `bzero`-like function which won't be optimised away by the compiler. Some

@@ -1,27 +1,12 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2013 Tox project.
+ */
+
 /*
  * DHT bootstrap
  *
  * A simple DHT boostrap node for tox.
- */
-
-/*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2013 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -178,7 +163,7 @@ int main(int argc, char *argv[])
 #ifdef TCP_RELAY_ENABLED
 #define NUM_PORTS 3
     uint16_t ports[NUM_PORTS] = {443, 3389, PORT};
-    TCP_Server *tcp_s = new_TCP_server(ipv6enabled, NUM_PORTS, ports, dht_get_self_secret_key(dht), onion);
+    TCP_Server *tcp_s = new_TCP_server(logger, ipv6enabled, NUM_PORTS, ports, dht_get_self_secret_key(dht), onion);
 
     if (tcp_s == nullptr) {
         printf("TCP server failed to initialize.\n");

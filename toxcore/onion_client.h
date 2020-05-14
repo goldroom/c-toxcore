@@ -1,26 +1,11 @@
-/*
- * Implementation of the client part of docs/Prevent_Tracking.txt (The part that
- * uses the onion stuff to connect to the friend)
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2013 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2013 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Implementation of the client part of docs/Prevent_Tracking.txt (The part that
+ * uses the onion stuff to connect to the friend)
  */
 #ifndef C_TOXCORE_TOXCORE_ONION_CLIENT_H
 #define C_TOXCORE_TOXCORE_ONION_CLIENT_H
@@ -151,8 +136,6 @@ int onion_dht_pk_callback(Onion_Client *onion_c, int friend_num, onion_dht_pk_cb
                           uint32_t number);
 
 /* Set a friends DHT public key.
- * timestamp is the time (current_time_monotonic()) at which the key was last confirmed belonging to
- * the other peer.
  *
  * return -1 on failure.
  * return 0 on success.
@@ -188,7 +171,7 @@ void oniondata_registerhandler(Onion_Client *onion_c, uint8_t byte, oniondata_ha
 
 void do_onion_client(Onion_Client *onion_c);
 
-Onion_Client *new_onion_client(Mono_Time *mono_time, Net_Crypto *c);
+Onion_Client *new_onion_client(const Logger *logger, Mono_Time *mono_time, Net_Crypto *c);
 
 void kill_onion_client(Onion_Client *onion_c);
 

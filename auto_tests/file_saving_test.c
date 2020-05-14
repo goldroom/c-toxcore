@@ -1,26 +1,11 @@
-/*
- * Small test for checking if obtaining savedata, saving it to disk and using
- * works correctly.
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2016 Tox project.
  */
 
 /*
- * Copyright © 2016-2018 The TokTok team.
- * Copyright © 2016 Tox project.
- *
- * This file is part of Tox, the free peer to peer instant messenger.
- *
- * Tox is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Tox is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Tox.  If not, see <http://www.gnu.org/licenses/>.
+ * Small test for checking if obtaining savedata, saving it to disk and using
+ * works correctly.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -79,6 +64,7 @@ static void save_data_encrypted(void)
 static void load_data_decrypted(void)
 {
     FILE *f = fopen(savefile, "r");
+    ck_assert(f != nullptr);
     fseek(f, 0, SEEK_END);
     int64_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -86,7 +72,9 @@ static void load_data_decrypted(void)
     ck_assert_msg(0 <= size && size <= UINT_MAX, "file size out of range");
 
     uint8_t *cipher = (uint8_t *)malloc(size);
+    ck_assert(cipher != nullptr);
     uint8_t *clear = (uint8_t *)malloc(size - TOX_PASS_ENCRYPTION_EXTRA_LENGTH);
+    ck_assert(clear != nullptr);
     size_t read_value = fread(cipher, sizeof(*cipher), size, f);
     printf("Read read_value = %u of %u\n", (unsigned)read_value, (unsigned)size);
 
@@ -96,6 +84,7 @@ static void load_data_decrypted(void)
                   "Could not decrypt, error code %d.", derr);
 
     struct Tox_Options *options = tox_options_new(nullptr);
+    ck_assert(options != nullptr);
 
     tox_options_set_savedata_type(options, TOX_SAVEDATA_TYPE_TOX_SAVE);
 
@@ -116,10 +105,10 @@ static void load_data_decrypted(void)
     ck_assert_msg(strcmp((const char *)readname, name) == 0,
                   "name returned by tox_self_get_name does not match expected result");
 
-    free(cipher);
-    free(clear);
-    fclose(f);
     tox_kill(t);
+    free(clear);
+    free(cipher);
+    fclose(f);
 }
 
 int main(void)
