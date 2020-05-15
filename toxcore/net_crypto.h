@@ -15,6 +15,8 @@
 #include "logger.h"
 
 #include <noise/protocol.h>
+//AKE NEW TODO: remove after testing
+#include <sodium.h>
 
 #include <pthread.h>
 

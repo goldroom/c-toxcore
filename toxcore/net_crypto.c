@@ -68,6 +68,10 @@ typedef struct Crypto_Connection {
     NoiseHandshakeState *handshake;
     NoiseCipherState *send_cipher;
     NoiseCipherState *recv_cipher;
+//    uint8_t send_key[CRYPTO_PUBLIC_KEY_SIZE];
+//    uint8_t recv_key[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t *send_key;
+    uint8_t *recv_key;
 
     uint8_t *temp_packet; /* Where the cookie request/handshake packet is stored while it is being sent. */
     uint16_t temp_packet_length;
@@ -2317,7 +2321,27 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
                 }
                 /*AKE NEW: Split out the two CipherState objects for send and receive */
                 else {
-                    int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+//                    int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+                	//AKE NEW TODO: does this work?
+                    int err = noise_handshakestate_split_without_noisecipherstate(conn->handshake, &conn->send_key, &conn->recv_key);
+
+                    //AKE NEW TODO: print keys
+                    // convert binary ToxID to readable hex
+                    char send_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+                    sodium_bin2hex(send_key_hex, sizeof(send_key_hex), conn->send_key,
+                    			sizeof(conn->send_key));
+//                    for (size_t i = 0; i < sizeof(send_key_hex) - 1; i++) {
+//                    	send_key_hex[i] = toupper(send_key_hex[i]);
+//                    }
+                    printf("conn->send_key: %s\n", send_key_hex);
+
+                    char recv_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+                    sodium_bin2hex(recv_key_hex, sizeof(recv_key_hex), conn->recv_key,
+                    sizeof(conn->recv_key));
+//                    for (size_t i = 0; i < sizeof(recv_key_hex) - 1; i++) {
+//                    	recv_key_hex[i] = toupper(recv_key_hex[i]);
+//                    }
+                    printf("conn->recv_key: %s\n", recv_key_hex);
 
                     if (err != NOISE_ERROR_NONE) {
                         noise_perror("split to start data transfer", err);
@@ -2730,7 +2754,27 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
                 }
                 /*AKE NEW: Split out the two CipherState objects for send and receive */
                 else {
-                    int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+//                    int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+                    //AKE NEW TODO: does this work?
+                    int err = noise_handshakestate_split_without_noisecipherstate(conn->handshake, &conn->send_key, &conn->recv_key);
+
+                    //AKE NEW TODO: print keys
+					// convert binary ToxID to readable hex
+					char send_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+					sodium_bin2hex(send_key_hex, sizeof(send_key_hex), conn->send_key,
+							sizeof(conn->send_key));
+//					for (size_t i = 0; i < sizeof(send_key_hex) - 1; i++) {
+//						send_key_hex[i] = toupper(send_key_hex[i]);
+//					}
+					printf("conn->send_key: %s\n", send_key_hex);
+
+					char recv_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+					sodium_bin2hex(recv_key_hex, sizeof(recv_key_hex), conn->recv_key,
+							sizeof(conn->recv_key));
+//					for (size_t i = 0; i < sizeof(recv_key_hex) - 1; i++) {
+//						recv_key_hex[i] = toupper(recv_key_hex[i]);
+//					}
+					printf("conn->recv_key: %s\n", recv_key_hex);
 
                     if (err != NOISE_ERROR_NONE) {
                         noise_perror("split to start data transfer", err);
@@ -2874,7 +2918,28 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
         }
         /*AKE NEW: Split out the two CipherState objects for send and receive */
         else {
-            int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+//            int err = noise_handshakestate_split(conn->handshake, &conn->send_cipher, &conn->recv_cipher);
+
+			//AKE NEW TODO: does this work?
+			int err = noise_handshakestate_split_without_noisecipherstate(conn->handshake, &conn->send_key, &conn->recv_key);
+			//AKE NEW TODO: print keys
+			// convert binary ToxID to readable hex
+			char send_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+			sodium_bin2hex(send_key_hex, sizeof(send_key_hex), conn->send_key,
+					sizeof(conn->send_key));
+//			for (size_t i = 0; i < sizeof(send_key_hex) - 1; i++) {
+//				send_key_hex[i] = toupper(send_key_hex[i]);
+//			}
+			printf("conn->send_key: %s\n", send_key_hex);
+
+			char recv_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+			sodium_bin2hex(recv_key_hex, sizeof(recv_key_hex), conn->recv_key,
+					sizeof(conn->recv_key));
+//			for (size_t i = 0; i < sizeof(recv_key_hex) - 1; i++) {
+//				recv_key_hex[i] = toupper(recv_key_hex[i]);
+//			}
+			printf("conn->recv_key: %s\n", recv_key_hex);
+
 
             if (err != NOISE_ERROR_NONE) {
                 noise_perror("split to start data transfer", err);
