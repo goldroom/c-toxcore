@@ -1018,7 +1018,7 @@ static int initialize_handshake
 //(NoiseHandshakeState *handshake, const Net_Crypto *c, int crypt_connection_id)
 (NoiseHandshakeState *handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key)
 {
-    printf("ENTERING: initialize_handshake()");
+    printf("ENTERING: initialize_handshake()\n");
     //AKE NEW: don't think this is necessary, just pass conn stuff diretly
     //Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
@@ -2328,21 +2328,21 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
 
                     //AKE NEW TODO: print keys
                     // convert binary ToxID to readable hex
-//                    char send_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-//                    sodium_bin2hex(send_key_hex, sizeof(send_key_hex), conn->send_key,
-//                    			sizeof(conn->send_key));
-////                    for (size_t i = 0; i < sizeof(send_key_hex) - 1; i++) {
-////                    	send_key_hex[i] = toupper(send_key_hex[i]);
-////                    }
-//                    printf("conn->send_key: %s\n", send_key_hex);
+                    char send_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+                    sodium_bin2hex(send_key_hex, sizeof(send_key_hex), conn->send_key,
+                    			sizeof(conn->send_key));
+//                    for (size_t i = 0; i < sizeof(send_key_hex) - 1; i++) {
+//                    	send_key_hex[i] = toupper(send_key_hex[i]);
+//                    }
+                    printf("conn->send_key: %s\n", send_key_hex);
 
-//                    char recv_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-//                    sodium_bin2hex(recv_key_hex, sizeof(recv_key_hex), conn->recv_key,
-//                    sizeof(conn->recv_key));
-////                    for (size_t i = 0; i < sizeof(recv_key_hex) - 1; i++) {
-////                    	recv_key_hex[i] = toupper(recv_key_hex[i]);
-////                    }
-//                    printf("conn->recv_key: %s\n", recv_key_hex);
+                    char recv_key_hex[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+                    sodium_bin2hex(recv_key_hex, sizeof(recv_key_hex), conn->recv_key,
+                    sizeof(conn->recv_key));
+//                    for (size_t i = 0; i < sizeof(recv_key_hex) - 1; i++) {
+//                    	recv_key_hex[i] = toupper(recv_key_hex[i]);
+//                    }
+                    printf("conn->recv_key: %s\n", recv_key_hex);
 
                     if (err != NOISE_ERROR_NONE) {
                         noise_perror("split to start data transfer", err);
@@ -2961,7 +2961,6 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
 //          noise_handshakestate_free(n_c->handshake_temp);
             conn->handshake = 0;
 //          n_c->handshake_temp = 0;
-            fprintf(stderr, "accept_crypto_connection(): Segmentation fault here?\n");
         }
     } else {
         //AKE NEW TODO: what to do in this case?
