@@ -877,7 +877,8 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t 
         }
 
         //AKE NEW: copy nonce from the decrypted payload => NOT necessary
-//      memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
+        //AKE NEW2: necessary!
+        memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
         //AKE NEW: copy other cookie
         memcpy(cookie, noise_payload.data + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
 
@@ -1500,8 +1501,9 @@ static int handle_request_packet(Mono_Time *mono_time, const Logger *log, Packet
 static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_t *data, uint16_t length)
 {
     //AKE NEW: + sizeof(uint16_t) + => last 2 bytes nonce used for encryption -> removed
-    //const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE);
-    const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + CRYPTO_MAC_SIZE);
+	//AKE NEW2:
+    const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE);
+//    const uint16_t max_length = MAX_CRYPTO_PACKET_SIZE - (1 + CRYPTO_MAC_SIZE);
 
     if (length == 0 || length > max_length) {
         return -1;
@@ -1717,6 +1719,7 @@ static uint16_t get_nonce_uint16(const uint8_t *nonce)
 static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint8_t *data, const uint8_t *packet,
                               uint16_t length)
 {
+	printf("ENTERING: handle_data_packet()\n");
     //AKE NEW: removed nonce from packet
     const uint16_t crypto_packet_overhead = 1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE;
 //    const uint16_t crypto_packet_overhead = 1 + CRYPTO_MAC_SIZE;
