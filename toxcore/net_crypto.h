@@ -127,7 +127,8 @@ typedef struct New_Connection {
     uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer. */
     //AKE NEW: base nonce and peer session pk handled by Noise
-//    uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
+    //AKE NEW2: base nonce needed
+    uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
 //    uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     uint8_t *cookie;
     uint8_t cookie_length;

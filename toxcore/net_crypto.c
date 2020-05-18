@@ -51,8 +51,9 @@ typedef enum Crypto_Conn_State {
 typedef struct Crypto_Connection {
     uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
     //AKE NEW: nonces not needed for Noise => handshake object
-//  uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
-//  uint8_t sent_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of sent packets. */
+    //AKE NEW2: nonces needed
+    uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
+    uint8_t sent_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of sent packets. */
     //AKE NEW: session keys not needed for Noise => handshake object
 //  uint8_t sessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* Our public key for this session. */
 //  uint8_t sessionsecret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private key for this session. */
@@ -535,11 +536,11 @@ static int handle_cookie_response(const Logger *log, uint8_t *cookie, uint64_t *
 //AKE: Old handshake packet length
 //#define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 //AKE NEW: first one with base nonce, second one without base nonce
-//#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 //AKE NEW: Initiator also sends ENCRYPTED static public key with MAC (first one with, second one without base nonce)
-//#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 
 /* Create a handshake packet and put it in packet.
  * cookie must be COOKIE_LENGTH bytes.
@@ -551,8 +552,12 @@ static int handle_cookie_response(const Logger *log, uint8_t *cookie, uint64_t *
  * return -1 on failure.
  * return HANDSHAKE_PACKET_LENGTH on success.
  */
-static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie,
+//AKE NEW2: with nonce
+static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie, const uint8_t *nonce,
                                    const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey, NoiseHandshakeState *handshake)
+//AKE NEW: without nonce
+//static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie,
+//                                   const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey, NoiseHandshakeState *handshake)
 {
     fprintf(stderr, "ENTERING: create_crypto_handshake()\n");
     int role = noise_handshakestate_get_role(handshake);
@@ -565,7 +570,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
          [Cookie 112 bytes]
          [session public key of the peer (32 bytes)] => handled by Noise
          [Encrypted message containing:
-         ~~[24 bytes base nonce]~~ => NO base Nonce -> handled by Noise/XSalsa20 not possible
+         [24 bytes base nonce] => WITH base Nonce -> Noise patched
          [64 bytes sha512 hash of the entire Cookie sitting outside the encrypted part]
          [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
          ]
@@ -574,18 +579,18 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
         //AKE NEW: Noise message + Application chosen payload
         NoiseBuffer noise_message;
         //AKE NEW: ephemeral public key of the RESPONDER + encrypted payload + MAC of encrypted payload (with and without base nonce)
-//      uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
-        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+//        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
         //AKE NEW: Application chosen payload of Noise message
         NoiseBuffer noise_payload;
         //AKE NEW: Payload contains NO base nonce, but sha512 hash of cookie (Initiator), and other cookie (Responder)
-//      uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
-        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
-        //AKE NEW: Add Nonce to payload => NOT necessary
-//      memcpy(noise_payload_buf, nonce, CRYPTO_NONCE_SIZE);
+        uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+//        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+        //AKE NEW: Add Nonce to payload => NOT necessary => necessary!
+        memcpy(noise_payload_buf, nonce, CRYPTO_NONCE_SIZE);
         //AKE NEW: Add SHA512 of cookie to payload
-//      crypto_sha512(noise_payload_buf + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
-        crypto_sha512(noise_payload_buf, cookie, COOKIE_LENGTH);
+        crypto_sha512(noise_payload_buf + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
+//        crypto_sha512(noise_payload_buf, cookie, COOKIE_LENGTH);
         uint8_t othercookie_plain[COOKIE_DATA_LENGTH ];
         // AKE: The cookie contains the static and DHT pubkey of the peer! not from the sender!
         memcpy(othercookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
@@ -594,7 +599,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
         // AKE: This is to create the OTHER cookie from Peer A/initiator
         // AKE: Also Peer B/responder sends a cookie again in the handshake packet
-        if (create_cookie(c->log, c->mono_time, noise_payload_buf + CRYPTO_SHA512_SIZE,
+        if (create_cookie(c->log, c->mono_time, noise_payload_buf + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE,
                           othercookie_plain, c->secret_symmetric_key) != 0) {
             return -1;
         }
@@ -626,7 +631,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
          [session public key of the peer (32 bytes)] => handled by Noise
          [static public key of the INITIATOR (32 bytes)] => handled by Noise
          [Encrypted message containing:
-         ~~[24 bytes base nonce]~~ => NO base Nonce -> handled by Noise/XSalsa20 not possible
+         [24 bytes base nonce] => WITH base Nonce -> Nonce patched
          [64 bytes sha512 hash of the entire Cookie sitting outside the encrypted part]
          [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
          ]
@@ -635,16 +640,20 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
         //AKE NEW: Noise message + Application chosen payload
         NoiseBuffer noise_message;
         //AKE NEW: ephemeral pubkey INITIATOR + static pubkey INITIATOR + MAC static pubkey + encrypted payload (without base nonce) + MAC of encrypted payload
-        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE
-                                                         + COOKIE_LENGTH
-                                                         + CRYPTO_MAC_SIZE];
+//        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE
+//                                                         + COOKIE_LENGTH
+//                                                         + CRYPTO_MAC_SIZE];
+        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
+                                                                 + COOKIE_LENGTH
+                                                                 + CRYPTO_MAC_SIZE];
         //AKE NEW: Application chosen payload of Noise message
         NoiseBuffer noise_payload;
         // AKE NEW: Payload contains NO base nonce, but sha512 hash of cookie (RESPONDER), and other cookie (INITIATOR)
-        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+//        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+        uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
         // AKE NEW: Add Nonce to payload => NOT necessary
-//      memcpy(noise_payload_buf, nonce, CRYPTO_NONCE_SIZE);
-        crypto_sha512(noise_payload_buf, cookie, COOKIE_LENGTH);
+        memcpy(noise_payload_buf, nonce, CRYPTO_NONCE_SIZE);
+        crypto_sha512(noise_payload_buf + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
         uint8_t othercookie_plain[COOKIE_DATA_LENGTH ];
         // AKE: The cookie contains the static and DHT pubkey of the peer! not from the sender!
         memcpy(othercookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
@@ -653,7 +662,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
         // AKE: This is to create the OTHER cookie from Peer A/initiator
         // AKE: Also Peer B sends a cookie again in the handshake packet
-        if (create_cookie(c->log, c->mono_time, noise_payload_buf + CRYPTO_SHA512_SIZE,
+        if (create_cookie(c->log, c->mono_time, noise_payload_buf + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE,
                           othercookie_plain, c->secret_symmetric_key) != 0) {
             return -1;
         }
@@ -748,9 +757,14 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
  * return -1 on failure.
  * return 0 on success.
  */
-static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
+//AKE NEW2: with nonce
+static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t *peer_real_pk,
                                    uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
                                    NoiseHandshakeState *handshake)
+//AKE NEW: without nonce
+//static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
+//                                   uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
+//                                   NoiseHandshakeState *handshake)
 {
     fprintf(stderr, "ENTERING: handle_crypto_handshake()\n");
     //AKE NEW: get handhake role => different handshake packet lengths
@@ -797,15 +811,20 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
         //AKE NEW: Noise message + Application chosen payload
         NoiseBuffer noise_message;
         //AKE NEW: ephemeral pubkey + encrypted INITIATOR static pubkey + MAC static pubkey + encrypted payload (without base nonce) + MAC of encrypted payload
-        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE
-                                                         + COOKIE_LENGTH
-                                                         + CRYPTO_MAC_SIZE];
+//        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE
+//                                                         + COOKIE_LENGTH
+//                                                         + CRYPTO_MAC_SIZE];
+        //AKE NEW2: with base nonce
+        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
+                                                                 + COOKIE_LENGTH
+                                                                 + CRYPTO_MAC_SIZE];
         //AKE NEW: Copy the data from packet to the noise_message_buf
         memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH);
         //AKE NEW: Application chosen payload of Noise message
         NoiseBuffer noise_payload;
         //AKE NEW: Payload contains NO base nonce, but sha512 hash of cookie (RESPONDER), and other cookie (INITIATOR)
-        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+//        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+        uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
         //AKE NEW: Format the message payload into "payloadbuf".
         noise_buffer_set_input(noise_payload, noise_payload_buf, sizeof(noise_payload_buf));
         //AKE NEW: Points to the message buffer to be populated with handshake details and the message payload.
@@ -819,11 +838,11 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
         }
 
         //AKE NEW: copy nonce from the decrypted payload => NOT necessary
-//      memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
+        memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
         //AKE NEW: copy other cookie
-        memcpy(cookie, noise_payload.data + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
+        memcpy(cookie, noise_payload.data + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
 
-        if (crypto_memcmp(cookie_hash, noise_payload.data, CRYPTO_SHA512_SIZE) != 0) {
+        if (crypto_memcmp(cookie_hash, noise_payload.data + CRYPTO_NONCE_SIZE, CRYPTO_SHA512_SIZE) != 0) {
             return -1;
         }
 
@@ -837,13 +856,14 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
         //AKE NEW: Noise message + Application chosen payload
         NoiseBuffer noise_message;
         //AKE NEW: ephemeral pubkey RESPONDER + encrypted payload (without base nonce) + MAC of encrypted payload
-        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+//        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
+        uint8_t noise_message_buf[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE];
         //AKE NEW: Copy the data from packet to the noise_message_buf
         memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - COOKIE_LENGTH);
         //AKE NEW: Application chosen payload of Noise message
         NoiseBuffer noise_payload;
-        //AKE NEW: Payload contains NO base nonce, sha512 hash of cookie, and other cookie
-        uint8_t noise_payload_buf[CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
+        //AKE NEW: Payload contains base nonce, sha512 hash of cookie, and other cookie
+        uint8_t noise_payload_buf[CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH ];
         //AKE NEW: Format the message payload into "payloadbuf".
         noise_buffer_set_input(noise_payload, noise_payload_buf, sizeof(noise_payload_buf));
         //AKE NEW: Points to the message buffer to be populated with handshake details and the message payload.
@@ -859,9 +879,9 @@ static int handle_crypto_handshake(const Net_Crypto *c, uint8_t *peer_real_pk,
         //AKE NEW: copy nonce from the decrypted payload => NOT necessary
 //      memcpy(nonce, noise_payload.data, CRYPTO_NONCE_SIZE);
         //AKE NEW: copy other cookie
-        memcpy(cookie, noise_payload.data + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
+        memcpy(cookie, noise_payload.data + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
 
-        if (crypto_memcmp(cookie_hash, noise_payload.data, CRYPTO_SHA512_SIZE) != 0) {
+        if (crypto_memcmp(cookie_hash, noise_payload.data + CRYPTO_NONCE_SIZE, CRYPTO_SHA512_SIZE) != 0) {
             return -1;
         }
 
@@ -1495,48 +1515,49 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
 
     pthread_mutex_lock(conn->mutex);
     //AKE NEW: removed sizeof(uint16_t) => last 2 bytes of base nonce => NO base nonce
-    //VLA(uint8_t, packet, 1 + sizeof(uint16_t) + length + CRYPTO_MAC_SIZE);
-    VLA(uint8_t, packet, 1 + length + CRYPTO_MAC_SIZE);
+    VLA(uint8_t, packet, 1 + sizeof(uint16_t) + length + CRYPTO_MAC_SIZE);
+//    VLA(uint8_t, packet, 1 + length + CRYPTO_MAC_SIZE);
     packet[0] = NET_PACKET_CRYPTO_DATA;
     //AKE NEW: copies the last 2 bytes of the nonce => NO base nonce
-//  memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
+    memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
     //AKE NEW: can't use conn->send_cipher directly because it's not only the key
-//  const int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+    //AKE NEW2: Now possible
+    const int len = encrypt_data_symmetric(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
 
-    /* AKE NEW: Encrypt the message and send it */
-    NoiseBuffer noise_message;
-    //AKE NEW: we cannot just use *data directly => we need memory for MAC
-    uint8_t noise_message_buf[length + CRYPTO_MAC_SIZE];
-    memcpy(noise_message_buf, data, length);
-    noise_buffer_set_inout(noise_message, noise_message_buf, length, sizeof(noise_message_buf));
-    //AKE NEW: Encryption of packet payload
-    //AKE NEW TODO: OR noise_cipherstate_encrypt_with_ad? What would be ad?
-    int err = noise_cipherstate_encrypt(conn->send_cipher, &noise_message);
+//    /* AKE NEW: Encrypt the message and send it */
+//    NoiseBuffer noise_message;
+//    //AKE NEW: we cannot just use *data directly => we need memory for MAC
+//    uint8_t noise_message_buf[length + CRYPTO_MAC_SIZE];
+//    memcpy(noise_message_buf, data, length);
+//    noise_buffer_set_inout(noise_message, noise_message_buf, length, sizeof(noise_message_buf));
+//    //AKE NEW: Encryption of packet payload
+//    //AKE NEW TODO: OR noise_cipherstate_encrypt_with_ad? What would be ad?
+//    int err = noise_cipherstate_encrypt(conn->send_cipher, &noise_message);
 
-    if (err != NOISE_ERROR_NONE) {
-        if (err == NOISE_ERROR_INVALID_NONCE) {
-            /*
-             * AKE NEW: The threshold for the counter-based nonce in Noise is 2^64-1
-             * From Noise paper:
-             * "Incrementing nonces: Reusing a nonce value for n with the same key k for encryption would be catastrophic.
-             * Implementations must carefully follow the rules for nonces. Nonces are not allowed to wrap back to zero due
-             * to integer overflow, and the maximum nonce value is reserved. This means parties are not allowed to send more
-             * than 2^64-1 transport messages."
-             * "If EncryptWithAd() or DecryptWithAd() signal an error due to nonce exhaustion, then
-             * the application must delete the CipherState and terminate the session."
-             * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
-             */
-            //AKE NEW TODO: connection_kill() / crypto_kill() / wipe_crypto_connection()? => wipe not available here
-//          wipe_crypto_connection(c, crypt_connection_id);
-            return -1;
-        } else {
-            noise_perror("noise_cipherstate_encrypt", err);
-            return -1;
-        }
-    }
+//    if (err != NOISE_ERROR_NONE) {
+//        if (err == NOISE_ERROR_INVALID_NONCE) {
+//            /*
+//             * AKE NEW: The threshold for the counter-based nonce in Noise is 2^64-1
+//             * From Noise paper:
+//             * "Incrementing nonces: Reusing a nonce value for n with the same key k for encryption would be catastrophic.
+//             * Implementations must carefully follow the rules for nonces. Nonces are not allowed to wrap back to zero due
+//             * to integer overflow, and the maximum nonce value is reserved. This means parties are not allowed to send more
+//             * than 2^64-1 transport messages."
+//             * "If EncryptWithAd() or DecryptWithAd() signal an error due to nonce exhaustion, then
+//             * the application must delete the CipherState and terminate the session."
+//             * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
+//             */
+//            //AKE NEW TODO: connection_kill() / crypto_kill() / wipe_crypto_connection()? => wipe not available here
+////          wipe_crypto_connection(c, crypt_connection_id);
+//            return -1;
+//        } else {
+//            noise_perror("noise_cipherstate_encrypt", err);
+//            return -1;
+//        }
+//    }
 
     //AKE NEW: copy ciphertext to packet
-    memcpy(packet + 1, noise_message_buf, sizeof(noise_message_buf));
+//    memcpy(packet + 1, noise_message_buf, sizeof(noise_message_buf));
     /*
      * AKE NEW: own Noise encryption function like encrypt_data_symmetric() -> also there is padding?
      * => I think not necessary
@@ -1549,12 +1570,14 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
      */
 
     //AKE NEW TODO: do I need this?
-//  if (len + 1 + sizeof(uint16_t) != SIZEOF_VLA(packet)) {
-//      pthread_mutex_unlock(conn->mutex);
-//      return -1;
-//  }
+    //AKE NEW2: needed
+    if (len + 1 + sizeof(uint16_t) != SIZEOF_VLA(packet)) {
+    	pthread_mutex_unlock(conn->mutex);
+    	return -1;
+    }
     //AKE NEW: not necessary
-//  increment_nonce(conn->sent_nonce);
+  	//AKE NEW2: needed
+  	increment_nonce(conn->sent_nonce);
     pthread_mutex_unlock(conn->mutex);
 
     return send_packet_to(c, crypt_connection_id, packet, SIZEOF_VLA(packet));
@@ -1695,8 +1718,8 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
                               uint16_t length)
 {
     //AKE NEW: removed nonce from packet
-    //const uint16_t crypto_packet_overhead = 1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE;
-    const uint16_t crypto_packet_overhead = 1 + CRYPTO_MAC_SIZE;
+    const uint16_t crypto_packet_overhead = 1 + sizeof(uint16_t) + CRYPTO_MAC_SIZE;
+//    const uint16_t crypto_packet_overhead = 1 + CRYPTO_MAC_SIZE;
 
     //AKE NEW: length is 1 + encrypted payload + MAC
     if (length <= crypto_packet_overhead || length > MAX_CRYPTO_PACKET_SIZE) {
@@ -1710,65 +1733,67 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
     }
 
     //AKE NEW: Nonce stuff not necessary
-//  uint8_t nonce[CRYPTO_NONCE_SIZE];
-//  // AKE: copy BASENONCE (= recv_nonce) into nonce
-//  memcpy(nonce, conn->recv_nonce, CRYPTO_NONCE_SIZE);
-//  uint16_t num_cur_nonce = get_nonce_uint16(nonce);
-//  uint16_t num;
-//  net_unpack_u16(packet + 1, &num);
-//  uint16_t diff = num - num_cur_nonce;
-//  increment_nonce_number(nonce, diff);
+    //AKE NEW2: necessary
+	uint8_t nonce[CRYPTO_NONCE_SIZE];
+	// AKE: copy BASENONCE (= recv_nonce) into nonce
+	memcpy(nonce, conn->recv_nonce, CRYPTO_NONCE_SIZE);
+	uint16_t num_cur_nonce = get_nonce_uint16(nonce);
+	uint16_t num;
+	net_unpack_u16(packet + 1, &num);
+	uint16_t diff = num - num_cur_nonce;
+	increment_nonce_number(nonce, diff);
     //AKE NEW: instead of conn->shared_key Noise receiving key conn->recv_cipher => NOT POSSIBLE
-//  int len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
-//          length - (1 + sizeof(uint16_t)), data);
+	//AKE NEW2: possible
+	int len = decrypt_data_symmetric(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t),
+          length - (1 + sizeof(uint16_t)), data);
 
-    NoiseBuffer noise_message;
-    //AKE NEW: can't just use *data direclty => need memory for MAC
-    uint8_t noise_message_buf[length - 1];
-    //AKE NEW: copy encrypted payload and MAC
-    memcpy(noise_message_buf, packet + 1, length - 1);
-
-    /* AKE NEW: Decrypt the incoming message */
-    noise_buffer_set_input(noise_message, noise_message_buf, sizeof(noise_message_buf));
-    int err = noise_cipherstate_decrypt(conn->recv_cipher, &noise_message);
-
-    if (err != NOISE_ERROR_NONE) {
-        //AKE NEW: verify if Nonce overflowed
-        if (err == NOISE_ERROR_INVALID_NONCE) {
-            /*
-             * NEW TODO: The threshold for the counter-based nonce in Noise is 2^64-1
-             * From Noise paper:
-             * "Incrementing nonces: Reusing a nonce value for n with the same key k for encryption would be catastrophic.
-             * Implementations must carefully follow the rules for nonces. Nonces are not allowed to wrap back to zero due
-             * to integer overflow, and the maximum nonce value is reserved. This means parties are not allowed to send more
-             * than 2^64-1 transport messages."
-             * "If EncryptWithAd() or DecryptWithAd() signal an error due to nonce exhaustion, then
-             * the application must delete the CipherState and terminate the session."
-             * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
-             */
-            //AKE NEW TODO: connection_kill() / wipe? => wipe not available here
-//          wipe_crypto_connection(c, crypt_connection_id);
-            return -1;
-        } else {
-            noise_perror("noise_cipherstate_decrypt", err);
-            return -1;
-        }
-    }
-
-    //AKE NEW: memcpy plaintext to data
-    memcpy(data, noise_message.data, noise_message.size);
+//    NoiseBuffer noise_message;
+//    //AKE NEW: can't just use *data direclty => need memory for MAC
+//    uint8_t noise_message_buf[length - 1];
+//    //AKE NEW: copy encrypted payload and MAC
+//    memcpy(noise_message_buf, packet + 1, length - 1);
+//
+//    /* AKE NEW: Decrypt the incoming message */
+//    noise_buffer_set_input(noise_message, noise_message_buf, sizeof(noise_message_buf));
+//    int err = noise_cipherstate_decrypt(conn->recv_cipher, &noise_message);
+//
+//    if (err != NOISE_ERROR_NONE) {
+//        //AKE NEW: verify if Nonce overflowed
+//        if (err == NOISE_ERROR_INVALID_NONCE) {
+//            /*
+//             * NEW TODO: The threshold for the counter-based nonce in Noise is 2^64-1
+//             * From Noise paper:
+//             * "Incrementing nonces: Reusing a nonce value for n with the same key k for encryption would be catastrophic.
+//             * Implementations must carefully follow the rules for nonces. Nonces are not allowed to wrap back to zero due
+//             * to integer overflow, and the maximum nonce value is reserved. This means parties are not allowed to send more
+//             * than 2^64-1 transport messages."
+//             * "If EncryptWithAd() or DecryptWithAd() signal an error due to nonce exhaustion, then
+//             * the application must delete the CipherState and terminate the session."
+//             * => noise_cipherstate_decrypt() -> NOISE_ERROR_INVALID_NONCE if the nonce previously overflowed.
+//             */
+//            //AKE NEW TODO: connection_kill() / wipe? => wipe not available here
+////          wipe_crypto_connection(c, crypt_connection_id);
+//            return -1;
+//        } else {
+//            noise_perror("noise_cipherstate_decrypt", err);
+//            return -1;
+//        }
+//    }
+//
+//    //AKE NEW: memcpy plaintext to data
+//    memcpy(data, noise_message.data, noise_message.size);
 
     //AKE NEW: IIUC this is checked by noise_cipherstate_decrypt() anyway
-//  if ((unsigned int) len != length - crypto_packet_overhead) {
-//      return -1;
-//  }
+    if ((unsigned int) len != length - crypto_packet_overhead) {
+        return -1;
+    }
 
     //AKE NEW: verified via noise_cipherstate_decrypt() (see above)
-//  if (diff > DATA_NUM_THRESHOLD * 2) {
-//      increment_nonce_number(conn->recv_nonce, DATA_NUM_THRESHOLD);
-//  }
-    //return len;
-    return noise_message.size;
+  	if (diff > DATA_NUM_THRESHOLD * 2) {
+  		increment_nonce_number(conn->recv_nonce, DATA_NUM_THRESHOLD);
+    }
+    return len;
+//    return noise_message.size;
 }
 
 /* Send a request packet.
@@ -1958,9 +1983,14 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
     if (role == NOISE_ROLE_INITIATOR) {
         uint8_t handshake_packet[HANDSHAKE_PACKET_LENGTH_INITIATOR];
 
-        if (create_crypto_handshake(c, handshake_packet, cookie,
+        //AKE NEW2: add nonce again
+//        if (create_crypto_handshake(c, handshake_packet, cookie,
+//                                    conn->public_key, dht_public_key, conn->handshake) != sizeof(handshake_packet)) {
+//            return -1;
+//        }
+        if (create_crypto_handshake(c, handshake_packet, cookie, conn->sent_nonce,
                                     conn->public_key, dht_public_key, conn->handshake) != sizeof(handshake_packet)) {
-            return -1;
+        	return -1;
         }
 
         if (new_temp_packet(c, crypt_connection_id, handshake_packet, sizeof(handshake_packet)) != 0) {
@@ -1969,9 +1999,13 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
     } else if (role == NOISE_ROLE_RESPONDER) {
         uint8_t handshake_packet[HANDSHAKE_PACKET_LENGTH_RESPONDER];
 
-        if (create_crypto_handshake(c, handshake_packet, cookie,
+//        if (create_crypto_handshake(c, handshake_packet, cookie,
+//                                    conn->public_key, dht_public_key, conn->handshake) != sizeof(handshake_packet)) {
+//            return -1;
+//        }
+        if (create_crypto_handshake(c, handshake_packet, cookie, conn->sent_nonce,
                                     conn->public_key, dht_public_key, conn->handshake) != sizeof(handshake_packet)) {
-            return -1;
+        	return -1;
         }
 
         if (new_temp_packet(c, crypt_connection_id, handshake_packet, sizeof(handshake_packet)) != 0) {
@@ -2303,9 +2337,13 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
                 if (action == NOISE_ACTION_READ_MESSAGE) {
                     fprintf(stderr, "handle_packet_connection(); ACTION: NOISE_ACTION_READ_MESSAGE\n");
 
-                    if (handle_crypto_handshake(c, peer_real_pk, dht_public_key, cookie,
+//                    if (handle_crypto_handshake(c, peer_real_pk, dht_public_key, cookie,
+//                                                packet, length, conn->public_key, conn->handshake) != 0) {
+//                        return -1;
+//                    }
+                    if (handle_crypto_handshake(c, conn->recv_nonce, peer_real_pk, dht_public_key, cookie,
                                                 packet, length, conn->public_key, conn->handshake) != 0) {
-                        return -1;
+                    	return -1;
                     }
                 }
 
@@ -2673,11 +2711,16 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
 
         if (action == NOISE_ACTION_READ_MESSAGE) {
             // AKE: Handle the crypto handshake packet from Peer A/initiator (incl. Other Cookie from A)
-            if (handle_crypto_handshake(c, n_c.public_key, n_c.dht_public_key,
-                                        n_c.cookie, data, length, nullptr, n_c.handshake_temp) != 0) {
-                free(n_c.cookie);
-                return -1;
-            }
+//            if (handle_crypto_handshake(c, n_c.public_key, n_c.dht_public_key,
+//                                        n_c.cookie, data, length, nullptr, n_c.handshake_temp) != 0) {
+//                free(n_c.cookie);
+//                return -1;
+//            }
+        	if (handle_crypto_handshake(c, n_c.recv_nonce, n_c.public_key, n_c.dht_public_key,
+        	                            n_c.cookie, data, length, nullptr, n_c.handshake_temp) != 0) {
+        		free(n_c.cookie);
+        		return -1;
+        	}
         }
 
     } else {
@@ -2715,7 +2758,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, IP_Port source, const 
              */
 //          noise_handshakestate_free(handshake_temp);
             //AKE NEW: Not necessary, nonce handled by Noise
-//          memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
+            //AKE NEW2: necessary
+            memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
             // AKE: Peer A/initiator session pk is copied into the crypto connection from the new connection
             //AKE NEW: conn->peersessionpublic_key is NOT needed for new handshake
 //          memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -2865,13 +2909,15 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
     memcpy(conn->public_key, n_c->public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
     //AKE NEW: Nonce not necessary - handled by Noise
-//  memcpy(conn->recv_nonce, n_c->recv_nonce, CRYPTO_NONCE_SIZE);
+    //AKE NEW2: necessary
+    memcpy(conn->recv_nonce, n_c->recv_nonce, CRYPTO_NONCE_SIZE);
     // AKE: the peer's session pubkey is copied into the crypto connection from new connection
     //AKE NEW: NOT NECESSARY - handled by Noise
     //memcpy(conn->peersessionpublic_key, n_c->peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
     // AKE: Nonce is set here, therefore call to handle_new_connection_handshake() only possible after call of this function!
     //AKE NEW: Nonce not necessary - handled by Noise
-//  random_nonce(conn->sent_nonce);
+    //AKE NEW2: necessary
+    random_nonce(conn->sent_nonce);
     // AKE: Message 2: generate new session public/private keypair -> peer receiving the handshake packet
     //AKE NEW: not necessary
     //crypto_new_keypair(conn->sessionpublic_key, conn->sessionsecret_key);
@@ -3025,7 +3071,8 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     // AKE: Nonce generation for handshake encrypted part
     //AKE NEW: not necessary
-//  random_nonce(conn->sent_nonce);
+    //AKE NEW: necessary
+    random_nonce(conn->sent_nonce);
     // AKE: Peer A handshake initiator _session_ public/private key pair generation
     //AKE NEW: Not necessary - handled by Noise
     //crypto_new_keypair(conn->sessionpublic_key, conn->sessionsecret_key);
