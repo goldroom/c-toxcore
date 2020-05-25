@@ -565,6 +565,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
     //AKE NEW: RESPONDER HANDSHAKE
     if (role == NOISE_ROLE_RESPONDER) {
         //AKE NEW: NOISE HANDSHAKE PACKET RESPONDER
+    	//AKE NEW TODO: since Nonce is not sent, this packet shouldn't be lost?
         /* Handshake packet structure
          [uint8_t 26]
          [Cookie 112 bytes]
@@ -629,7 +630,8 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
          [uint8_t 26]
          [Cookie 112 bytes]
          [session public key of the peer (32 bytes)] => handled by Noise
-         [static public key of the INITIATOR (32 bytes)] => handled by Noise
+         [encrypted static public key of the INITIATOR (32 bytes)] => handled by Noise
+         [MAC encrypted static pubkey 16 bytes]
          [Encrypted message containing:
          [24 bytes base nonce] => WITH base Nonce -> Nonce patched
          [64 bytes sha512 hash of the entire Cookie sitting outside the encrypted part]
@@ -1494,6 +1496,7 @@ static int handle_request_packet(Mono_Time *mono_time, const Logger *log, Packet
  *
  * AKE NEW: function adapted because we need to use ChaCha20 via noise_cipherstate_encrypt() because
  * there is (currently) no possibility to retrieve the symmetric key from a NoiseCipherState.
+ * AKE NEW2: patched Noise-C to provide function to retrieve key from NoiseCipherState
  *
  * return -1 on failure.
  * return 0 on success.
