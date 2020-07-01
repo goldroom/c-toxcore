@@ -14,9 +14,10 @@
 #include "TCP_connection.h"
 #include "logger.h"
 
+//AKE NEW2: Noise-C API
 #include <noise/protocol.h>
-//AKE NEW TODO: remove after testing
-#include <sodium.h>
+//AKE NEW2: Used to print sending/receiving keys after a successful handshake for testing purposes
+//#include <sodium.h>
 
 #include <pthread.h>
 
@@ -70,7 +71,7 @@
 #define PACKET_ID_REJOIN_CONFERENCE 100
 #define PACKET_ID_LOSSY_CONFERENCE 199
 
-//AKE NEW CRYPTO_NOISE_PROTOCOL_NAME
+//AKE NEW: CRYPTO_NOISE_PROTOCOL_NAME
 #define CRYPTO_NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
 
 /* Maximum size of receiving and sending packet buffers. */
@@ -126,9 +127,9 @@ typedef struct New_Connection {
     IP_Port source;
     uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer. */
-    //AKE NEW: base nonce and peer session pk handled by Noise
     //AKE NEW2: base nonce needed
     uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
+    //AKE NEW2: public key of peer handled by Noise
 //    uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     uint8_t *cookie;
     uint8_t cookie_length;
