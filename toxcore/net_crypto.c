@@ -350,7 +350,7 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
 
 	/*
 	 * TODO here I know the public key of the peer and could initialize the handshake!
-	 * fuck but I don't have access to "conn" and conn->handshake
+	 * => but I don't have access to "conn" and conn->handshake
 	 * also the peer shouldn't allocate any memory during the cookie phase -> no temporary handshake variable
 	 */
 
@@ -1963,7 +1963,7 @@ bool udp, void *userdata)
 				//NEW AKE TODO: maybe I need to handle more here?
 				return -1;
 			}
-			//AKE NEW TODO: NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE an create_send_handshake übergeben und je nachdem die message bauen
+			//AKE NEW TODO: pass NOISE_ACTION_WRITE_MESSAGE/NOISE_ACTION_READ_MESSAGE to create_send_handshake to build the correct packet
 			int action = noise_handshakestate_get_action(conn->handshake);
 			//AKE NEW TODO: Call create_send_handshake() here
 		}
