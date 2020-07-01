@@ -3833,9 +3833,9 @@ int crypto_kill(Net_Crypto *c, int crypt_connection_id)
         clear_temp_packet(c, crypt_connection_id);
         clear_buffer(&conn->send_array);
         clear_buffer(&conn->recv_array);
-        //AKE NEW TODO: Verify if this is ok; freeing Noise CipherState memory
-        noise_cipherstate_free(conn->send_cipher);
-        noise_cipherstate_free(conn->recv_cipher);
+        //AKE NEW2: Not necessary, using arrays instead of CipherStates
+//        noise_cipherstate_free(conn->send_cipher);
+//        noise_cipherstate_free(conn->recv_cipher);
         ret = wipe_crypto_connection(c, crypt_connection_id);
     }
 
