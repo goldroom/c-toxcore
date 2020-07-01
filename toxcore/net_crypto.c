@@ -2289,8 +2289,8 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
         case NET_PACKET_CRYPTO_HS: {
         	//AKE NEW: Debug output, prints packet kind and conn state in decimal
 //            fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => NET_PACKET_CRYPTO_HS => CRYPTO CONN STATE: %d\n",
-                    packet[0],
-                    conn->status);
+//                    packet[0],
+//                    conn->status);
 
             // AKE: very likely, that "Peer B"/receiver (or Peer A/initiator) is in one of these states
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
@@ -2384,7 +2384,7 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
             if (conn->status != CRYPTO_CONN_NOT_CONFIRMED && conn->status != CRYPTO_CONN_ESTABLISHED) {
             	//AKE NW: Debug output
 //                fprintf(stderr, "ENTERING: handle_packet_connection(); PACKET: %d => ERROR => CRYPTO CONN STATE: %d\n", packet[0],
-                        conn->status);
+//                        conn->status);
                 return -1;
             }
 
