@@ -23,7 +23,6 @@ These instructions will guide you through the process of building and installing
       - [Cross-compiling from Linux](#cross-compiling-from-linux)
 - [Pre-built binaries](#pre-built-binaries)
   - [Linux](#linux)
-  - [Windows](#windows-1)
 
 ## Overview
 
@@ -118,6 +117,13 @@ cmake \
   ..
 ```
 
+### Building tests
+In addition to the integration tests ("autotests") and miscellaneous tests
+enabled by cmake variables described above, there are unit tests which will be
+built if the source distribution of gtest (the Google Unit Test framework) is
+found by cmake in `c-toxcore/third_party`. This can be achieved by running
+'git clone https://github.com/google/googletest` from that directory.
+
 ### Build process
 
 #### Unix-like
@@ -155,7 +161,40 @@ msbuild ALL_BUILD.vcxproj
 
 ###### MSYS/Cygwin
 
-There are currently no instructions on how to build toxcore on Windows host in MSYS/Cygwin. Contribution of the instructions is welcome!
+Download Cygwin ([32-bit](https://cygwin.com/setup-x86.exe)/[64-bit](https://cygwin.com/setup-x86_64.exe))
+
+Search and select exactly these packages in Devel category:
+
+  - mingw64-i686-gcc-core (32-bit) / mingw64-x86_64-gcc-core (64-bit)
+  - mingw64-i686-gcc-g++ (32-bit) / mingw64-x86_64-gcc-g++ (64-bit)
+  - make
+  - cmake
+  - libtool
+  - autoconf
+  - automake
+  - tree
+  - curl
+  - perl
+  - yasm
+  - pkg-config
+
+To handle Windows EOL correctly run the following in the Cygwin Terminal:
+
+```sh
+echo '
+export SHELLOPTS
+set -o igncr
+' > ~/.bash_profile
+```
+
+Download toxcore source code and extract it to a folder.
+
+Open Cygwin Terminal in the toxcore folder and run `./other/windows_build_script_toxcore.sh` to start the build process.
+
+Toxcore build result files will appear in `/root/prefix/` relatively to Cygwin folder (default `C:\cygwin64`).
+
+Dependency versions can be customized in `./other/windows_build_script_toxcore.sh` and described in the section below.
+
 
 ##### Cross-compiling from Linux
 
@@ -179,9 +218,10 @@ Build the container image based on the Dockerfile. The following options are ava
 | `SUPPORT_ARCH_i686`   | Support building 32-bit toxcore.                               | "true" or "false" (case sensitive). | true          |
 | `SUPPORT_ARCH_x86_64` | Support building 64-bit toxcore.                               | "true" or "false" (case sensitive). | true          |
 | `SUPPORT_TEST`        | Support running toxcore automated tests.                       | "true" or "false" (case sensitive). | false         |
-| `VERSION_OPUS`        | Version of libopus to build toxcore with.                      | Git branch name.                    | v1.2.1        |
-| `VERSION_SODIUM`      | Version of libsodium to build toxcore with.                    | Git branch name.                    | 1.0.18        |
-| `VERSION_VPX`         | Version of libvpx to build toxcore with.                       | Git branch name.                    | v1.6.1        |
+| `CROSS_COMPILE`       | Cross-compiling. True for Docker, false for Cygwin.            | "true" or "false" (case sensitive). | true          |
+| `VERSION_OPUS`        | Version of libopus to build toxcore with.                      | Numeric version number.             | 1.3.1         |
+| `VERSION_SODIUM`      | Version of libsodium to build toxcore with.                    | Numeric version number.             | 1.0.18        |
+| `VERSION_VPX`         | Version of libvpx to build toxcore with.                       | Numeric version number.             | 1.9.0         |
 
 Example of building a container image with options
 
@@ -201,7 +241,8 @@ Run the container to build toxcore. The following options are available to custo
 | `ENABLE_ARCH_i686`   | Build 32-bit toxcore. The image should have been built with `SUPPORT_ARCH_i686` enabled.   | "true" or "false" (case sensitive). | `true`                                                             |
 | `ENABLE_ARCH_x86_64` | Build 64-bit toxcore. The image should have been built with `SUPPORT_ARCH_x86_64` enabled. | "true" or "false" (case sensitive). | `true`                                                             |
 | `ENABLE_TEST`        | Run the test suite. The image should have been built with `SUPPORT_TEST` enabled.          | "true" or "false" (case sensitive). | `false`                                                            |
-| `EXTRA_CMAKE_FLAGS`  | Extra arguments to pass to the CMake command when building toxcore.                        | CMake options.                      | `-DWARNINGS=OFF -DBOOTSTRAP_DAEMON=OFF -DTEST_TIMEOUT_SECONDS=300` |
+| `EXTRA_CMAKE_FLAGS`  | Extra arguments to pass to the CMake command when building toxcore.                        | CMake options.                      | `-DTEST_TIMEOUT_SECONDS=90`                                        |
+| `CROSS_COMPILE`      | Cross-compiling. True for Docker, false for Cygwin.                                        | "true" or "false" (case sensitive). | `true`                                                             |
 
 Example of running the container with options
 
@@ -222,14 +263,3 @@ After the build succeeds, you should see the built toxcore libraries in `/path/t
 ### Linux
 
 Toxcore is packaged by at least by the following distributions: ALT Linux, [Arch Linux](https://www.archlinux.org/packages/?q=toxcore), [Fedora](https://apps.fedoraproject.org/packages/toxcore), Mageia, openSUSE, PCLinuxOS, ROSA and Slackware, [according to the information from pkgs.org](https://pkgs.org/download/toxcore). Note that this list might be incomplete and some other distributions might package it too.
-
-Debian and Ubuntu packages are available in [tox.chat's package repository](https://tox.chat/download.html#gnulinux).
-
-### Windows
-
-There are nightly cross-compiled binaries available on Jenkins.
-
-|        | Shared                                                                                                                                                                              | Static                                                                                                                                                                              |
-|--------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 32-bit | [Download](https://build.tox.chat/job/libtoxcore-toktok_build_windows_x86_shared_release/lastSuccessfulBuild/artifact/libtoxcore-toktok_build_windows_x86_shared_release.zip)       | [Download](https://build.tox.chat/job/libtoxcore-toktok_build_windows_x86_static_release/lastSuccessfulBuild/artifact/libtoxcore-toktok_build_windows_x86_static_release.zip)       |
-| 64-bit | [Download](https://build.tox.chat/job/libtoxcore-toktok_build_windows_x86-64_shared_release/lastSuccessfulBuild/artifact/libtoxcore-toktok_build_windows_x86-64_shared_release.zip) | [Download](https://build.tox.chat/job/libtoxcore-toktok_build_windows_x86-64_static_release/lastSuccessfulBuild/artifact/libtoxcore-toktok_build_windows_x86-64_static_release.zip) |

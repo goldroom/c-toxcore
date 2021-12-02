@@ -21,7 +21,7 @@
 #include "util.h"
 
 /* defines for the array size and
-   timeout for onion announce packets. */
+ * timeout for onion announce packets. */
 #define ANNOUNCE_ARRAY_SIZE 256
 #define ANNOUNCE_TIMEOUT 10
 
@@ -1782,7 +1782,7 @@ static int onion_isconnected(const Onion_Client *onion_c)
     }
 
     /* Consider ourselves online if we are announced to half or more nodes
-       we are connected to */
+     * we are connected to */
     if (num && announced) {
         if ((num / 2) <= announced && (pnodes / 2) <= num) {
             return 1;
@@ -1834,14 +1834,11 @@ void do_onion_client(Onion_Client *onion_c)
         }
     }
 
-    bool udp_connected = dht_non_lan_connected(onion_c->dht);
+    onion_c->udp_connected = dht_non_lan_connected(onion_c->dht);
 
     if (mono_time_is_timeout(onion_c->mono_time, onion_c->first_run, ONION_CONNECTION_SECONDS * 2)) {
-        set_tcp_onion_status(nc_get_tcp_c(onion_c->c), !udp_connected);
+        set_tcp_onion_status(nc_get_tcp_c(onion_c->c), !onion_c->udp_connected);
     }
-
-    onion_c->udp_connected = udp_connected
-                             || get_random_tcp_onion_conn_number(nc_get_tcp_c(onion_c->c)) == -1; /* Check if connected to any TCP relays. */
 
     if (onion_connection_status(onion_c)) {
         for (unsigned i = 0; i < onion_c->num_friends; ++i) {
