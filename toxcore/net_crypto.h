@@ -16,6 +16,8 @@
 #include "TCP_connection.h"
 #include "logger.h"
 
+#include <IK.h>
+
 /*** Crypto payloads. */
 
 /*** Ranges. */
@@ -119,6 +121,15 @@ non_null() const uint8_t *nc_get_self_secret_key(const Net_Crypto *c);
 non_null() TCP_Connections *nc_get_tcp_c(const Net_Crypto *c);
 non_null() DHT *nc_get_dht(const Net_Crypto *c);
 
+//TODO: Noise
+typedef Noise_IK_device_t        device;
+typedef Noise_IK_session_t       noise_session;
+typedef Noise_IK_peer_t          peer;
+typedef Noise_IK_encap_message_t encap_message;
+typedef Noise_IK_rcode           rcode;
+typedef uint32_t              peer_id;
+#define RETURN_IF_ERROR(e, msg) if (!(e)) { printf("Error: %s\n", msg); return 1; }
+
 typedef struct New_Connection {
     IP_Port source;
     uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
@@ -127,6 +138,9 @@ typedef struct New_Connection {
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     uint8_t *cookie;
     uint8_t cookie_length;
+
+    //TODO: Noise
+    noise_session *noise_session_temp;
 } New_Connection;
 
 typedef int connection_status_cb(void *object, int id, bool status, void *userdata);

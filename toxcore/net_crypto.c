@@ -57,6 +57,9 @@ typedef struct Crypto_Connection {
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer */
 
+    //TODO: needed for Noise
+    noise_session *noise_session;
+
     uint8_t *temp_packet; /* Where the cookie request/handshake packet is stored while it is being sent. */
     uint16_t temp_packet_length;
     uint64_t temp_packet_sent_time; /* The time at which the last temp_packet was sent in ms. */
@@ -518,13 +521,29 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
  * @retval false on failure.
  * @retval true on success.
  */
+//TODO: adapt for Noise
 non_null(1, 2, 3, 4, 5, 6, 7) nullable(9)
 static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t *session_pk, uint8_t *peer_real_pk,
-                                    uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk)
+                                    uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
+                                    noise_session *noise_session)
 {
     if (length != HANDSHAKE_PACKET_LENGTH) {
         return false;
     }
+
+    //TODO: here or in handle_crypto_handshake()?
+    // ## Bob: read the message
+    // res = Noise_IKpsk2_session_read(&encap_msg, bob_session, cipher_msg_len, cipher_msg);
+    // RETURN_IF_ERROR(Noise_IKpsk2_rcode_is_success(res), "Receive message 0");
+
+    //TODO: to differentiate between initiator and responder there are two possible functions:
+    // Noise_IK_session_get_status() => only says what to do, not if I'm initiator or not
+        // TODO: is this information enough? since everything is abstracted anyway => maybe for the first message it's sufficient, but the following ones are more complicated?
+    // Noise_IK_session_get_info() => this returns a string Noise_IK_noise_string, but I don't understand what it contains
+
+    //TODO: 08.09.22 continue here -> maybe try out library in easier example?
+    Noise_IK_session_get_status(noise_session);
+    
 
     uint8_t cookie_plain[COOKIE_DATA_LENGTH];
 
@@ -2017,6 +2036,9 @@ non_null(1, 2, 3) nullable(5)
 static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source, const uint8_t *data, uint16_t length,
         void *userdata)
 {
+    //TODO: adapt
+    uint8_t prologue[10] = "Noise* 1.0";
+
     New_Connection n_c;
     n_c.cookie = (uint8_t *)malloc(COOKIE_LENGTH);
 
@@ -2027,8 +2049,39 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     n_c.source = *source;
     n_c.cookie_length = COOKIE_LENGTH;
 
+    /*
+     * Initialize Bob's device
+     */
+    // Create the device
+    //TODO: needed in Crypto_connection? => should be included in session after Noise_IK_session_create_responder()
+    device *responder_device = Noise_IK_device_create(10, prologue, nullptr,
+                                             nullptr, c->self_secret_key);
+
+    // Register Alice
+    // Note that we parameterized the code generation so that whenever we receive
+    // a public static key during the handshake, this static key is accepted only
+    // if it was registered before. If we don't register Alice, the first message
+    // from Alice to Bob will get rejected.
+    //TODO: curious if that will be a problem.
+    // Note that it is possible to parameterize the API to accept unknown remote
+    // keys, but in that case it is necessary to provide a validation function
+    // to check remote static keys upon receiving them (the payload should then
+    // contain a certificate for the key): we can't use arbitrary remote static
+    // public keys.
+    peer *peer_alice = Noise_IK_device_add_peer(responder_device, nullptr, n_c.public_key);
+    if (!peer_alice) return 1;
+
+    // Bob, however, uses the first message to learn Alice's identity.
+    n_c.noise_session_temp = Noise_IK_session_create_responder(responder_device);
+    RETURN_IF_ERROR(n_c.noise_session_temp, "Responder noise_session creation");
+
+    //TODO: here or in handle_crypto_handshake()?
+    // ## Bob: read the message
+    // res = Noise_IKpsk2_session_read(&encap_msg, bob_session, cipher_msg_len, cipher_msg);
+    // RETURN_IF_ERROR(Noise_IKpsk2_rcode_is_success(res), "Receive message 0");
+
     if (!handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
-                                 n_c.cookie, data, length, nullptr)) {
+                                 n_c.cookie, data, length, nullptr, n_c.noise_session_temp)) {
         free(n_c.cookie);
         return -1;
     }
@@ -2049,6 +2102,18 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
                 free(n_c.cookie);
                 return -1;
             }
+
+            //TODO: continue here
+            conn->noise_session = n_c.noise_session_temp;
+            //noise_session *testession = conn->noise_session;
+
+            //TODO: returns: Noise_IK_Handshake_write or Noise_IK_Handshake_read or Noise_IK_Transport
+            //Noise_IK_session_get_status(conn->noise_session);
+            //TODO: access to tag in noise_session? initiator or responder? Is it even necessary to differentiate? yes...
+            //Noise_IK_session_t dst = sn[0U];
+            //if (dst.tag == Noise_IK_DS_Initiator)
+            //Noise_IK_session_t dst = conn->noise_session[0U];
+            
 
             memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
             memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -2140,6 +2205,14 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
  */
 int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const uint8_t *dht_public_key)
 {
+    uint8_t prologue[10] = "Noise* 1.0";
+    rcode res;
+    encap_message *encap_msg;
+    uint32_t cipher_msg_len;
+    uint8_t *cipher_msg;
+    uint32_t plain_msg_len;
+    uint8_t *plain_msg;
+    
     int crypt_connection_id = getcryptconnection_id(c, real_public_key);
 
     if (crypt_connection_id != -1) {
@@ -2173,6 +2246,27 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->packets_left = CRYPTO_MIN_QUEUE_LENGTH;
     conn->rtt_time = DEFAULT_PING_CONNECTION;
     memcpy(conn->dht_public_key, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+
+    /*
+     * Initialize Alice's device
+     */
+    // Create the device
+    device *alice_device = Noise_IK_device_create(10, prologue, nullptr,
+                                               nullptr, c->self_secret_key);
+
+    // Register Bob
+    peer *peer_bob = Noise_IK_device_add_peer(alice_device, nullptr, real_public_key);
+    if (!peer_bob) return 1;
+    peer_id bob_id = Noise_IK_peer_get_id(peer_bob);
+
+    /*
+     * Start communicating
+     */
+    // We first need to create communication sessions.
+    // Alice being the initiator, she needs to know who to send the first
+    // message, hence the bob_id parameter.
+    conn->noise_session = Noise_IK_session_create_initiator(alice_device, bob_id);
+    RETURN_IF_ERROR(conn->noise_session, "Alice noise_session creation");
 
     conn->cookie_request_number = random_u64(c->rng);
     uint8_t cookie_request[COOKIE_REQUEST_LENGTH];

@@ -87,6 +87,10 @@ if(${CMAKE_VERSION} VERSION_LESS "3.1.0")
 else()
   # Set standard version for compiler.
   set(CMAKE_C_STANDARD 99)
+  # added because of https://stackoverflow.com/questions/53217370/undefined-reference-to-le16toh-error-in-makefile
+  # e.g. /home/tb/Documents/ToxNoise/hacl-star/dist/karamel/include/krml/lowstar_endianness.h:201:23: warning: implicit declaration of function ‘le64toh’ [-Wimplicit-function-declaration]
+    # #define load64_le(b) (le64toh(load64(b)))
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DEFAULT_SOURCE")
   set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_C_EXTENSIONS OFF)
   set(CMAKE_CXX_EXTENSIONS OFF)
@@ -295,7 +299,9 @@ set(toxcore_SOURCES
   toxcore/tox_unpack.h
   toxcore/util.c
   toxcore/util.h)
-set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${LIBSODIUM_LIBRARIES})
+set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${LIBSODIUM_LIBRARIES} "/home/tb/Documents/ToxNoise/hacl-star/dist/gcc-compatible/libevercrypt.a" "/home/tb/Documents/ToxNoise/noise-star/noise-all/api-IK/IK_25519_ChaChaPoly_SHA512/libnoiseapi.a")
+include_directories("/usr/include" "/home/tb/Documents/ToxNoise/hacl-star/dist/karamel/include" "/home/tb/Documents/ToxNoise/hacl-star/dist/karamel/krmllib/dist/minimal" "/home/tb/Documents/ToxNoise/noise-star/noise-all/api-IK/IK_25519_ChaChaPoly_SHA512" "/home/tb/Documents/ToxNoise/hacl-star/dist/gcc-compatible")
+#target_include_directories("/home/tb/Documents/ToxNoise/hacl-star/dist/karamel/include" "/home/tb/Documents/ToxNoise/hacl-star/dist/karamel/krmllib/dist/minimal" "/home/tb/Documents/ToxNoise/noise-star/noise-all/api-IK/IK_25519_ChaChaPoly_SHA512" "/home/tb/Documents/ToxNoise/hacl-star/dist/gcc-compatible")
 set(toxcore_PKGCONFIG_REQUIRES ${toxcore_PKGCONFIG_REQUIRES} libsodium)
 set(toxcore_API_HEADERS
   ${toxcore_SOURCE_DIR}/toxcore/tox.h^tox
