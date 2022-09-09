@@ -463,7 +463,13 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
     return COOKIE_LENGTH;
 }
 
+//AKE: Old handshake packet length
 #define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+
+//Noise: with base nonce
+#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//Noise: Initiator also sends ENCRYPTED static public key with MAC (with base nonce)
+#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 
 /** @brief Create a handshake packet and put it in packet.
  * @param cookie must be COOKIE_LENGTH bytes.
@@ -527,23 +533,27 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
                                     uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
                                     noise_session *noise_session)
 {
+    //TODO: find out length in case of noise-star AKE packet
+    //TODO: Depending on length I can find out if I'm initiator or responder => or at least how much I need to read.. otherwise it just fails?
+    //AKE NEW2: Debug output
+//    fprintf(stderr, "ENTERING: handle_crypto_handshake()\n");
+    //AKE NEW: get handhake role => different handshake packet lengths
+    // int role = noise_handshakestate_get_role(handshake);
+
+    // if (role == NOISE_ROLE_RESPONDER) {
+    //     if (length != HANDSHAKE_PACKET_LENGTH_INITIATOR) {
+    //         return -1;
+    //     }
+    // } else if (role == NOISE_ROLE_INITIATOR) {
+    //     if (length != HANDSHAKE_PACKET_LENGTH_RESPONDER) {
+    //         return -1;
+    //     }
+    // } else {
+    //     return -1;
+    // }
     if (length != HANDSHAKE_PACKET_LENGTH) {
         return false;
-    }
-
-    //TODO: here or in handle_crypto_handshake()?
-    // ## Bob: read the message
-    // res = Noise_IKpsk2_session_read(&encap_msg, bob_session, cipher_msg_len, cipher_msg);
-    // RETURN_IF_ERROR(Noise_IKpsk2_rcode_is_success(res), "Receive message 0");
-
-    //TODO: to differentiate between initiator and responder there are two possible functions:
-    // Noise_IK_session_get_status() => only says what to do, not if I'm initiator or not
-        // TODO: is this information enough? since everything is abstracted anyway => maybe for the first message it's sufficient, but the following ones are more complicated?
-    // Noise_IK_session_get_info() => this returns a string Noise_IK_noise_string, but I don't understand what it contains
-
-    //TODO: 08.09.22 continue here -> maybe try out library in easier example?
-    Noise_IK_session_get_status(noise_session);
-    
+    }    
 
     uint8_t cookie_plain[COOKIE_DATA_LENGTH];
 
@@ -558,6 +568,54 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
     uint8_t cookie_hash[CRYPTO_SHA512_SIZE];
     crypto_sha512(cookie_hash, packet + 1, COOKIE_LENGTH);
 
+    //TODO: to differentiate between initiator and responder there are two possible functions:
+    // Noise_IK_session_get_status() => only says what to do, not if I'm initiator or not => returns Noise_IK_Handshake_write (1) or Noise_IK_Handshake_read (0) or Noise_IK_IMS_Transport (2)
+        //TODO: is this information enough? since everything is abstracted anyway => maybe for the first message it's sufficient, but the following ones are more complicated?
+        //TODO: can I just do both?
+    // Noise_IK_session_get_info() => this returns a string Noise_IK_noise_string, seems to contain just the name of the session (i.e. Alice)
+    //TODO: I'm here to read a handshake packet, so if status is not Noise_IK_Handshake_read then fail    
+
+    //TODO: 09.09.2022: Continue here
+    if (Noise_IK_session_get_status(noise_session) == Noise_IK_Handshake_read) {
+        rcode res;
+        encap_message *encap_msg;
+        uint32_t plain_msg_len;
+        uint8_t *plain_msg;
+        //TODO: packet conversion from Tox handshake packet to valid Noise message
+        //TODO: Packet also contains PACKET KIND => what is this again?
+        //Noise: ephemeral pubkey + encrypted INITIATOR static pubkey + MAC static pubkey + encrypted payload (with base nonce) + MAC of encrypted payload
+            //TODO: define similar to handshake packet length for initiator and responder?
+        uint8_t noise_message_buf_length = CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
+                                                                 + COOKIE_LENGTH
+                                                                 + CRYPTO_MAC_SIZE;
+        uint8_t noise_message_buf[noise_message_buf_length];
+        //AKE NEW: Copy the data from packet to the noise_message_buf
+        memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH);
+        //TODO: encap msg is/needs to be empty, session+cipher_msg_len+cipher_msg need to be provided
+            // TODO: calc length for noise_message_buf from packet length
+        res = Noise_IK_session_read(&encap_msg, noise_session, noise_message_buf_length, noise_message_buf);
+        RETURN_IF_ERROR(Noise_IK_rcode_is_success(res), "Receive message 0");
+
+        // In order to actually read the message, Bob needs to unpack it.
+        // Unpacking is similar to packing, but here we use an authentication level:
+        // if at the current step the message is non-empty and the protocol doesn't
+        // provide enough authentication guarantees, then the unpacking fails.
+        //TODO: NOISE_IK_AUTH_ZERO is correct?
+        RETURN_IF_ERROR(
+                        Noise_IK_unpack_message_with_auth_level(&plain_msg_len, &plain_msg,
+                                                            NOISE_IK_AUTH_ZERO, encap_msg),
+                        "Unpack message 0");
+        Noise_IK_encap_message_p_free(encap_msg);
+
+        //TODO: plain_msg contains actual payload of noise handshake message
+
+        // if (cipher_msg_len > 0) free(cipher_msg);
+        // if (plain_msg_len > 0) free(plain_msg);
+    } else {
+        return false;
+    }
+
+    //TODO: remove?
     uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
     const int len = decrypt_data(cookie_plain, c->self_secret_key, packet + 1 + COOKIE_LENGTH,
                            packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE,
