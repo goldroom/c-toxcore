@@ -129,6 +129,8 @@ typedef Noise_IK_encap_message_t encap_message;
 typedef Noise_IK_rcode           rcode;
 typedef uint32_t              peer_id;
 #define RETURN_IF_ERROR(e, msg) if (!(e)) { printf("Error: %s\n", msg); return 1; }
+#define NOISE_INITIATOR (uint8_t*)("I")
+#define NOISE_RESPONDER (uint8_t*)("R")
 
 typedef struct New_Connection {
     IP_Port source;

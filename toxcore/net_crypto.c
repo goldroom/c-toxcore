@@ -463,13 +463,18 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
     return COOKIE_LENGTH;
 }
 
-//AKE: Old handshake packet length
+//AKE: Old handshake packet length => 385 bytes
 #define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 
-//Noise: with base nonce
-#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-//Noise: Initiator also sends ENCRYPTED static public key with MAC (with base nonce)
-#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//Noise: WITHOUT base nonce => 337 bytes
+#define HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//Noise: Initiator also sends ENCRYPTED static public key with MAC (WITHOUT base nonce) => 385 bytes
+#define HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + COOKIE_LENGTH + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+//Noise: 234 bytes
+#define NOISE_IK_HANDSHAKE_PACKET_LENGTH_RESPONDER (HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - COOKIE_LENGTH)
+//Noise: 272 bytes
+#define NOISE_IK_HANDSHAKE_PACKET_LENGTH_INITIATOR (HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH)
+
 
 /** @brief Create a handshake packet and put it in packet.
  * @param cookie must be COOKIE_LENGTH bytes.
@@ -480,8 +485,16 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
  */
 non_null()
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie, const uint8_t *nonce,
-                                   const uint8_t *session_pk, const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey)
+                                   const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey,
+                                   noise_session *noise_session)
 {
+    //TODO: In this case no differentiation should be necessary, just write cookie+hash into payload, if wrong status it will fail anyway
+    if (Noise_IK_session_get_status(noise_session) == Noise_IK_Handshake_write) {
+
+    } else{
+        return -1;
+    }
+
     uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
     memcpy(plain, nonce, CRYPTO_NONCE_SIZE);
     memcpy(plain + CRYPTO_NONCE_SIZE, session_pk, CRYPTO_PUBLIC_KEY_SIZE);
@@ -535,6 +548,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
 {
     //TODO: find out length in case of noise-star AKE packet
     //TODO: Depending on length I can find out if I'm initiator or responder => or at least how much I need to read.. otherwise it just fails?
+        //TODO: Additionally I know if it's a Noise-based handshake or an old handshake packet? 
+        // => unfortunately the initiator handshake packet is also 385 bytes => -48 bytes (2x Nonce), but +48 bytes (encrypted static priv key (32) + MAC (16))
     //AKE NEW2: Debug output
 //    fprintf(stderr, "ENTERING: handle_crypto_handshake()\n");
     //AKE NEW: get handhake role => different handshake packet lengths
@@ -576,24 +591,25 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
     //TODO: I'm here to read a handshake packet, so if status is not Noise_IK_Handshake_read then fail    
 
     //TODO: 09.09.2022: Continue here
+    //TODO: case of RESPONDER
+    //TODO: Do I need to Noise_IK_session_free() and Noise_IK_device_free() uf wrong state?
     if (Noise_IK_session_get_status(noise_session) == Noise_IK_Handshake_read) {
         rcode res;
         encap_message *encap_msg;
-        uint32_t plain_msg_len;
-        uint8_t *plain_msg;
-        //TODO: packet conversion from Tox handshake packet to valid Noise message
-        //TODO: Packet also contains PACKET KIND => what is this again?
-        //Noise: ephemeral pubkey + encrypted INITIATOR static pubkey + MAC static pubkey + encrypted payload (with base nonce) + MAC of encrypted payload
-            //TODO: define similar to handshake packet length for initiator and responder?
-        uint8_t noise_message_buf_length = CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE
-                                                                 + COOKIE_LENGTH
-                                                                 + CRYPTO_MAC_SIZE;
-        uint8_t noise_message_buf[noise_message_buf_length];
+        uint32_t plain_payload_len;
+        uint8_t *plain_payload;
+        //TODO: Need to check for length because initiator packet length != responder packet length
+        // packet conversion from Tox handshake packet to valid Noise message
+        // Packet also contains 1byte PACKET KIND => identifies packet as handshake packet in this case
+        //Noise: INITIATOR ephemeral pubkey + encrypted INITIATOR static pubkey + MAC static pubkey + encrypted payload (WITHOUT base nonce) + MAC of encrypted payload
+        uint8_t noise_message_buf[NOISE_IK_HANDSHAKE_PACKET_LENGTH_INITIATOR];
+
         //AKE NEW: Copy the data from packet to the noise_message_buf
-        memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - COOKIE_LENGTH);
+        memcpy(noise_message_buf, packet + 1 + COOKIE_LENGTH, noise_message_buf_length);
         //TODO: encap msg is/needs to be empty, session+cipher_msg_len+cipher_msg need to be provided
             // TODO: calc length for noise_message_buf from packet length
-        res = Noise_IK_session_read(&encap_msg, noise_session, noise_message_buf_length, noise_message_buf);
+        res = Noise_IK_session_read(&encap_msg, noise_session, NOISE_IK_HANDSHAKE_PACKET_LENGTH_INITIATOR, noise_message_buf);
+        //TODO: is this the correct return?!
         RETURN_IF_ERROR(Noise_IK_rcode_is_success(res), "Receive message 0");
 
         // In order to actually read the message, Bob needs to unpack it.
@@ -602,20 +618,32 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
         // provide enough authentication guarantees, then the unpacking fails.
         //TODO: NOISE_IK_AUTH_ZERO is correct?
         RETURN_IF_ERROR(
-                        Noise_IK_unpack_message_with_auth_level(&plain_msg_len, &plain_msg,
+                        Noise_IK_unpack_message_with_auth_level(&plain_payload_len, &plain_payload,
                                                             NOISE_IK_AUTH_ZERO, encap_msg),
                         "Unpack message 0");
         Noise_IK_encap_message_p_free(encap_msg);
 
-        //TODO: plain_msg contains actual payload of noise handshake message
+        //TODO: plain_payload contains actual payload of noise handshake message
 
-        // if (cipher_msg_len > 0) free(cipher_msg);
-        // if (plain_msg_len > 0) free(plain_msg);
+        //TODO: adapt to noise-star, get cookie data out of payload
+        //AKE NEW: copy other cookie
+        memcpy(cookie, noise_payload.data + CRYPTO_NONCE_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
+
+        if (crypto_memcmp(cookie_hash, noise_payload.data + CRYPTO_NONCE_SIZE, CRYPTO_SHA512_SIZE) != 0) {
+            return -1;
+        }
+
+        //AKE NEW: memcpy peer_real_pk from cookie_plain + dht_public_key
+        memcpy(peer_real_pk, cookie_plain, CRYPTO_PUBLIC_KEY_SIZE);
+        memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
+        //AKE NEW: memcpy session_pk shouldn't be necessary
+
+        if (plain_payload_len > 0) free(plain_payload);
     } else {
         return false;
     }
 
-    //TODO: remove?
+    //TODO: remove? => no, needed for backwards compatibility
     uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
     const int len = decrypt_data(cookie_plain, c->self_secret_key, packet + 1 + COOKIE_LENGTH,
                            packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE,
@@ -629,6 +657,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
         return false;
     }
 
+    //TODO: Needed?
     memcpy(nonce, plain, CRYPTO_NONCE_SIZE);
     memcpy(session_pk, plain + CRYPTO_NONCE_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(cookie, plain + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
@@ -2127,6 +2156,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     // contain a certificate for the key): we can't use arbitrary remote static
     // public keys.
     peer *peer_alice = Noise_IK_device_add_peer(responder_device, nullptr, n_c.public_key);
+    //TODO: correct return value?
     if (!peer_alice) return 1;
 
     // Bob, however, uses the first message to learn Alice's identity.
@@ -2268,8 +2298,8 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     encap_message *encap_msg;
     uint32_t cipher_msg_len;
     uint8_t *cipher_msg;
-    uint32_t plain_msg_len;
-    uint8_t *plain_msg;
+    uint32_t plain_payload_len;
+    uint8_t *plain_payload;
     
     int crypt_connection_id = getcryptconnection_id(c, real_public_key);
 
@@ -2309,7 +2339,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
      * Initialize Alice's device
      */
     // Create the device
-    device *alice_device = Noise_IK_device_create(10, prologue, nullptr,
+    device *alice_device = Noise_IK_device_create(10, prologue, NOISE_INITIATOR,
                                                nullptr, c->self_secret_key);
 
     // Register Bob
@@ -2324,6 +2354,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     // Alice being the initiator, she needs to know who to send the first
     // message, hence the bob_id parameter.
     conn->noise_session = Noise_IK_session_create_initiator(alice_device, bob_id);
+    //TODO: Check for correct return value
     RETURN_IF_ERROR(conn->noise_session, "Alice noise_session creation");
 
     conn->cookie_request_number = random_u64(c->rng);
