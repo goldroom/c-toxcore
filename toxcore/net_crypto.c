@@ -67,7 +67,7 @@ typedef struct Crypto_Connection {
     // uint8_t niose_send_key[CRYPTO_PUBLIC_KEY_SIZE];
     // uint8_t noise_recv_key[CRYPTO_PUBLIC_KEY_SIZE];
     //TODO: necessary?
-    uint16_t handshake_send_interval;
+    // uint16_t handshake_send_interval;
     // bool initiator;
     // uint8_t precomputed_static_static[CRYPTO_PUBLIC_KEY_SIZE];
 
@@ -637,7 +637,8 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
     /* Noise-based handshake */
     if (noise_handshake != nullptr) {
         LOGGER_DEBUG(c->log, "NOISE HANDSHAKE");
-            /* Initiator: Handshake packet structure
+        /* Noise INITIATOR: -> e, es, s, ss */
+        /* Initiator: Handshake packet structure
             [uint8_t 26]
             [session public key of the peer (32 bytes)] => currently in plain
             [24 bytes nonce for static pub key encryption]
@@ -649,8 +650,8 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             [Cookie 112 bytes] => Cookie encrypted and authenticated via XAEAD
             [112 bytes Other Cookie (used by the other peer to respond to the handshake packet)]
             [MAC encrypted payload 16 bytes]
+            => 393 bytes in total
             */
-        /* Noise INITIATOR: -> e, es, s, ss */
         if (noise_handshake->initiator) {
             /* set ephemeral private+public */ 
             memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_PUBLIC_KEY_SIZE);
@@ -735,8 +736,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             return NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR;
         }
         /* Noise RESPONDER: <- e, ee, se */
-        else {
-            /* Responder: Handshake packet structure
+        /* Responder: Handshake packet structure
             [uint8_t 26]
             [session public key of the peer (32 bytes)] => currently in plain
             [24 bytes nonce for handshake payload encryption]
@@ -745,7 +745,9 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             [Cookie 112 bytes] => Cookie encrypted and authenticate via XAEAD
             [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
             [MAC encrypted payload 16 bytes]
+            => 321 bytes in total
             */
+        else {
             /* set ephemeral private+public */ 
             memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_PUBLIC_KEY_SIZE);
             memcpy(noise_handshake->ephemeral_public, ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
@@ -876,9 +878,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
         uint8_t cookie_plain[COOKIE_DATA_LENGTH];
 
         /* -> e, es, s, ss */
-        if(!noise_handshake->initiator) {
-            LOGGER_DEBUG(c->log, "RESPONDER: Noise HS handle/ReadMessage");
-            /* Initiator: Handshake packet structure handled here
+        /* Initiator: Handshake packet structure handled here
             [uint8_t 26]
             [session public key of the peer (32 bytes)] => currently in plain
             [24 bytes nonce static pub key encryption]
@@ -890,7 +890,10 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             [Cookie 112 bytes] => Cookie encrypted and authenticated via XAEAD
             [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
             [MAC 16 bytes]
+            => 393 bytes in total
             */
+        if(!noise_handshake->initiator) {
+            LOGGER_DEBUG(c->log, "RESPONDER: Noise HS handle/ReadMessage");
 
             //TODO: remove from production code
             // char log_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR*2+1];
@@ -965,11 +968,12 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             // memcpy(session_pk, packet + 1 + COOKIE_LENGTH, CRYPTO_PUBLIC_KEY_SIZE);
             // cookie necessary for Noise RESPONDER, used afterwards in create_send_handshake()
             memcpy(cookie, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH, COOKIE_LENGTH);
-            // not necessary for Noise (=remote static) => TODO: necessary for friend_connection.c->handle_new_connections()
+            /* Noise: not necessary for Noise (=remote static), but necessary for friend_connection.c->handle_new_connections() */ 
+            //TODO: check for nullptr when called via handle_packet_crypto_hs() (not necessary there)?
             memcpy(peer_real_pk, noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE);
             // necessary
             memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
-            //TODO: memzero packet, unwatend side effects?
+            //TODO: memzero packet, unwatend side effects? TODO: not possible currently because const
             // crypto_memzero(packet, length);
 
             //TODO: memzero handshake_payload_plain
@@ -978,9 +982,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             return true;
         }
         /* Noiise ReadMessage() if initiator:  <- e, ee, se */
-        else {
-            LOGGER_DEBUG(c->log, "INITIATOR: Noise HS handle/ReadMessage");
-            /* Responder: Handshake packet structure
+        /* Responder: Handshake packet structure
             [uint8_t 26]
             [session public key of the peer (32 bytes)]
             [24 bytes nonce handshake payload encryption]
@@ -989,7 +991,11 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             [Cookie 112 bytes] => Cookie encrypted and authenticated via XAEAD
             [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
             [MAC 16 bytes]
+            => 321 bytes in total
             */
+        else {
+            LOGGER_DEBUG(c->log, "INITIATOR: Noise HS handle/ReadMessage");
+            
             memcpy(noise_handshake->remote_ephemeral, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
             noise_mix_hash(noise_handshake->hash, noise_handshake->remote_ephemeral, CRYPTO_PUBLIC_KEY_SIZE);
 
@@ -1045,7 +1051,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             // necessary
             memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
 
-            //TODO: memzero packet, unwatend side effects?
+            //TODO: memzero packet, unwatend side effects? TODO: not possible currently because const
             // crypto_memzero(packet, length);
 
             //TODO: memzero handshake_payload_plain
@@ -2197,7 +2203,7 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
 
     if (len <= (int)(sizeof(uint32_t) * 2)) {
         LOGGER_DEBUG(c->log, "connection_kill() because data packet decryption failure, crypt_connection_id: %d", crypt_connection_id);
-        //TODO: unwanted side effects? TODO: leave here?
+        //TODO: unwanted side effects? leave here?
         connection_kill(c, crypt_connection_id, userdata);
         return -1;
     }
@@ -2255,7 +2261,7 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
         crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
         mem_delete(c->mem, conn->noise_handshake);
         conn->noise_handshake = nullptr;
-        //TODO: non-Noise: also delete values from conn?
+        //TODO: non-Noise: also crypto_memzero() values from conn?
 
         if (conn->connection_status_callback != nullptr) {
             conn->connection_status_callback(conn->connection_status_callback_object, conn->connection_status_callback_id,
@@ -2453,6 +2459,8 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                     return -1;
                 }
 
+                /* Noise: peer_real_pk (=conn->public_key) not necessary here, but for call in handle_new_connection_handshake() 
+                    -> otherwise not working (call via friend_connection.c) */ 
                 if (!handle_crypto_handshake(c, conn->recv_nonce, nullptr, conn->public_key, dht_public_key, cookie,
                                     packet, length, nullptr, conn->noise_handshake)) {
                     return -1;
@@ -2484,6 +2492,8 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, nullptr, false) != 0) {
                     return false;
                 }
+                /* Noise: peer_real_pk (=conn->public_key) not necessary here, but for call in handle_new_connection_handshake() 
+                    -> otherwise not working (call via friend_connection.c) */ 
                 if (!handle_crypto_handshake(c, conn->recv_nonce, nullptr, conn->public_key, dht_public_key, cookie,
                                     packet, length, nullptr, conn->noise_handshake)) {
                     return -1;
@@ -2772,7 +2782,7 @@ static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
     pthread_mutex_destroy(c->crypto_connections[crypt_connection_id].mutex);
     mem_delete(c->mem, c->crypto_connections[crypt_connection_id].mutex);
 
-    // necessary for backwards compatibility and because after ESTABLISHED noise_handshake is already memzeroed/freed
+    /* Noise: necessary for backwards compatibility and because after CRYPTO_CONN_ESTABLISHED noise_handshake is already memzeroed/freed */ 
     if (c->crypto_connections[crypt_connection_id].noise_handshake != nullptr) {
         crypto_memzero(c->crypto_connections[crypt_connection_id].noise_handshake, sizeof(Noise_Handshake));
         mem_delete(c->mem, c->crypto_connections[crypt_connection_id].noise_handshake);
@@ -2908,7 +2918,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     //TODO: remove
     LOGGER_DEBUG(c->log, "RESPONDER: After Handshake init");
 
-    //TODO: need to add peer_real_pk (=n_c.public_key) -> otherwise not working (call via friend_connection.c)
+    /* Noise: peer_real_pk (=n_c.public_key) not necessary for Noise, but need to include -> otherwise not working (call via friend_connection.c) */ 
     if (!handle_crypto_handshake(c, n_c.recv_nonce, nullptr, n_c.public_key, n_c.dht_public_key,
                                  n_c.cookie, data, length, nullptr, n_c.noise_handshake)) {
         crypto_memzero(n_c.noise_handshake, sizeof(Noise_Handshake));
@@ -3067,7 +3077,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 
     conn->connection_number_tcp = connection_number_tcp;
 
-    //TODO: only happening for RESPONDER?
+    //Noise: only happening for RESPONDER
     if (n_c->noise_handshake != nullptr) {
         if (!n_c->noise_handshake->initiator) {
             //TODO: remove
@@ -4132,7 +4142,6 @@ int crypto_kill(Net_Crypto *c, int crypt_connection_id)
         clear_temp_packet(c, crypt_connection_id);
         clear_buffer(c->mem, &conn->send_array);
         clear_buffer(c->mem, &conn->recv_array);
-        //TODO: adapt for Noise?
         ret = wipe_crypto_connection(c, crypt_connection_id);
     }
 
@@ -4296,15 +4305,6 @@ void do_net_crypto(Net_Crypto *c, void *userdata)
     do_tcp(c, userdata);
     send_crypto_packets(c);
 }
-
-//TODO: use? or just use crypto_memzero()?
-// static void noise_handshake_zero(struct noise_handshake *handshake)
-// {
-// 	memset(&handshake->ephemeral_private, 0, CRYPTO_PUBLIC_KEY_SIZE);
-// 	memset(&handshake->remote_ephemeral, 0, CRYPTO_PUBLIC_KEY_SIZE);
-// 	memset(&handshake->hash, 0, CRYPTO_SHA512_SIZE);
-// 	memset(&handshake->chaining_key, 0, CRYPTO_SHA512_SIZE);
-// }
 
 void kill_net_crypto(Net_Crypto *c)
 {
