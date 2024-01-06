@@ -457,7 +457,7 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
  * @retval -1 if there was a problem.
  * @return length of encrypted data if everything was fine.
  */
-non_null()
+non_null(1, 2, 3, 4, 5, 7) nullable(6)
 size_t encrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *nonce, const uint8_t *plain, size_t plain_length,
                                uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
 
@@ -471,7 +471,7 @@ size_t encrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *no
  * @retval -1 if there was a problem (decryption failed).
  * @return length of plain data if everything was fine.
  */
-non_null()
+non_null(1, 2, 3, 4, 5, 7) nullable(6)
 size_t decrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *nonce, const uint8_t *encrypted, size_t encrypted_length,
                                uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
