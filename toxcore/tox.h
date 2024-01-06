@@ -700,9 +700,9 @@ struct Tox_Options {
     const Tox_System *operating_system;
 
     /**
-     * compatibility for old non-NOISE handshake.
+     * Compatibility for old non-Noise handshake.
      *
-     * If this is set to false, non-NOISE handshake
+     * If this is set to false, non-Noise handshake
      * will not work anymore.
      *
      * Default: true.
