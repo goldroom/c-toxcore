@@ -634,7 +634,7 @@ static int noise_handshake_init
  * @retval NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER if Noise handshake responder
  * 
  */
-non_null()
+non_null(1, 2, 3, 4, 6, 7, 8) nullable(5, 9)
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t *cookie, const uint8_t *nonce, const uint8_t *ephemeral_private,
                                    const uint8_t *ephemeral_public, const uint8_t *peer_real_pk, const uint8_t *peer_dht_pubkey, Noise_Handshake *noise_handshake)
 {
@@ -870,7 +870,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
  * @retval false on failure.
  * @retval true on success.
  */
-non_null(1, 2, 3, 4, 5, 6, 7) nullable(9)
+non_null(1, 2, 5, 7) nullable(3, 4, 6, 9, 10)
 static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t *session_pk, uint8_t *peer_real_pk,
                                     uint8_t *dht_public_key, uint8_t *cookie, const uint8_t *packet, uint16_t length, const uint8_t *expected_real_pk,
                                     Noise_Handshake *noise_handshake)
