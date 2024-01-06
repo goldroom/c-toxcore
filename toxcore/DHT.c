@@ -16,13 +16,15 @@
 #include "LAN_discovery.h"
 #include "bin_pack.h"
 #include "ccompat.h"
+#include "crypto_core.h"
 #include "logger.h"
+#include "mem.h"
 #include "mono_time.h"
 #include "network.h"
 #include "ping.h"
+#include "ping_array.h"
 #include "shared_key_cache.h"
 #include "state.h"
-#include "util.h"
 
 /** The timeout after which a node is discarded completely. */
 #define KILL_NODE_TIMEOUT (BAD_NODE_TIMEOUT + PING_INTERVAL)
@@ -420,7 +422,8 @@ static bool bin_pack_ip_port(Bin_Pack *bp, const Logger *logger, const IP_Port *
 non_null()
 static bool bin_pack_ip_port_handler(Bin_Pack *bp, const Logger *logger, const void *obj)
 {
-    return bin_pack_ip_port(bp, logger, (const IP_Port *)obj);
+    const IP_Port *ip_port = (const IP_Port *)obj;
+    return bin_pack_ip_port(bp, logger, ip_port);
 }
 
 int pack_ip_port(const Logger *logger, uint8_t *data, uint16_t length, const IP_Port *ip_port)
@@ -508,7 +511,7 @@ int unpack_ip_port(IP_Port *ip_port, const uint8_t *data, uint16_t length, bool 
         return -1;
     }
 
-    *ip_port = empty_ip_port;
+    ipport_reset(ip_port);
 
     if (is_ipv4) {
         const uint32_t size = 1 + SIZE_IP4 + sizeof(uint16_t);
@@ -1477,11 +1480,11 @@ static int sendnodes_ipv6(const DHT *dht, const IP_Port *ip_port, const uint8_t 
 non_null()
 static int handle_getnodes(void *object, const IP_Port *source, const uint8_t *packet, uint16_t length, void *userdata)
 {
+    DHT *const dht = (DHT *)object;
+
     if (length != (CRYPTO_SIZE + CRYPTO_MAC_SIZE + sizeof(uint64_t))) {
         return 1;
     }
-
-    DHT *const dht = (DHT *)object;
 
     /* Check if packet is from ourself. */
     if (pk_equal(packet + 1, dht->self_public_key)) {
@@ -1828,7 +1831,9 @@ static uint8_t do_ping_and_sendnode_requests(DHT *dht, uint64_t *lastgetnode, co
                 ++not_kill;
 
                 if (mono_time_is_timeout(dht->mono_time, assoc->last_pinged, PING_INTERVAL)) {
-                    dht_getnodes(dht, &assoc->ip_port, client->public_key, public_key);
+                    const IP_Port *target = &assoc->ip_port;
+                    const uint8_t *target_key = client->public_key;
+                    dht_getnodes(dht, target, target_key, public_key);
                     assoc->last_pinged = temp_time;
                 }
 
@@ -1861,7 +1866,9 @@ static uint8_t do_ping_and_sendnode_requests(DHT *dht, uint64_t *lastgetnode, co
             rand_node += random_range_u32(dht->rng, num_nodes - (rand_node + 1));
         }
 
-        dht_getnodes(dht, &assoc_list[rand_node]->ip_port, client_list[rand_node]->public_key, public_key);
+        const IP_Port *target = &assoc_list[rand_node]->ip_port;
+        const uint8_t *target_key = client_list[rand_node]->public_key;
+        dht_getnodes(dht, target, target_key, public_key);
 
         *lastgetnode = temp_time;
         ++*bootstrap_times;
@@ -1890,8 +1897,7 @@ static void do_dht_friends(DHT *dht)
         dht_friend->num_to_bootstrap = 0;
 
         do_ping_and_sendnode_requests(dht, &dht_friend->lastgetnode, dht_friend->public_key, dht_friend->client_list,
-                                      MAX_FRIEND_CLIENTS,
-                                      &dht_friend->bootstrap_times, true);
+                                      MAX_FRIEND_CLIENTS, &dht_friend->bootstrap_times, true);
     }
 }
 
@@ -1927,14 +1933,11 @@ static void do_close(DHT *dht)
     for (size_t i = 0; i < LCLIENT_LIST; ++i) {
         Client_data *const client = &dht->close_clientlist[i];
 
-        IPPTsPng *const assocs[] = { &client->assoc6, &client->assoc4, nullptr };
-
-        for (IPPTsPng * const *it = assocs; *it != nullptr; ++it) {
-            IPPTsPng *const assoc = *it;
-
-            if (assoc->timestamp != 0) {
-                assoc->timestamp = badonly;
-            }
+        if (client->assoc4.timestamp != 0) {
+            client->assoc4.timestamp = badonly;
+        }
+        if (client->assoc6.timestamp != 0) {
+            client->assoc6.timestamp = badonly;
         }
     }
 }
@@ -2263,11 +2266,12 @@ non_null()
 static int handle_nat_ping(void *object, const IP_Port *source, const uint8_t *source_pubkey, const uint8_t *packet,
                            uint16_t length, void *userdata)
 {
+    DHT *const dht = (DHT *)object;
+
     if (length != sizeof(uint64_t) + 1) {
         return 1;
     }
 
-    DHT *const dht = (DHT *)object;
     uint64_t ping_id;
     memcpy(&ping_id, packet + 1, sizeof(uint64_t));
 
@@ -2634,6 +2638,7 @@ DHT *new_dht(const Logger *log, const Memory *mem, const Random *rng, const Netw
     DHT *const dht = (DHT *)mem_alloc(mem, sizeof(DHT));
 
     if (dht == nullptr) {
+        LOGGER_ERROR(log, "failed to allocate DHT struct (%ld bytes)", (unsigned long)sizeof(DHT));
         return nullptr;
     }
 
@@ -2651,6 +2656,7 @@ DHT *new_dht(const Logger *log, const Memory *mem, const Random *rng, const Netw
     dht->ping = ping_new(mem, mono_time, rng, dht);
 
     if (dht->ping == nullptr) {
+        LOGGER_ERROR(log, "failed to initialise ping");
         kill_dht(dht);
         return nullptr;
     }
@@ -2667,10 +2673,11 @@ DHT *new_dht(const Logger *log, const Memory *mem, const Random *rng, const Netw
 
     crypto_new_keypair(rng, dht->self_public_key, dht->self_secret_key);
 
-    dht->shared_keys_recv = shared_key_cache_new(mono_time, mem, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
-    dht->shared_keys_sent = shared_key_cache_new(mono_time, mem, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
+    dht->shared_keys_recv = shared_key_cache_new(log, mono_time, mem, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
+    dht->shared_keys_sent = shared_key_cache_new(log, mono_time, mem, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
 
     if (dht->shared_keys_recv == nullptr || dht->shared_keys_sent == nullptr) {
+        LOGGER_ERROR(log, "failed to initialise shared key cache");
         kill_dht(dht);
         return nullptr;
     }
@@ -2679,6 +2686,7 @@ DHT *new_dht(const Logger *log, const Memory *mem, const Random *rng, const Netw
     dht->dht_ping_array = ping_array_new(mem, DHT_PING_ARRAY_SIZE, PING_TIMEOUT);
 
     if (dht->dht_ping_array == nullptr) {
+        LOGGER_ERROR(log, "failed to initialise ping array");
         kill_dht(dht);
         return nullptr;
     }
@@ -2691,6 +2699,7 @@ DHT *new_dht(const Logger *log, const Memory *mem, const Random *rng, const Netw
 
         uint32_t token; // We don't intend to delete these ever, but need to pass the token
         if (dht_addfriend(dht, random_public_key_bytes, nullptr, nullptr, 0, &token) != 0) {
+            LOGGER_ERROR(log, "failed to add initial random seed DHT friends");
             kill_dht(dht);
             return nullptr;
         }

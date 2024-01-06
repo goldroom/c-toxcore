@@ -10,17 +10,33 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "DHT.h"
+#include "TCP_client.h"
+#include "TCP_connection.h"
+#include "TCP_server.h"
+#include "announce.h"
+#include "bin_pack.h"
+#include "bin_unpack.h"
 #include "ccompat.h"
+#include "crypto_core.h"
+#include "forwarding.h"
+#include "friend_connection.h"
+#include "friend_requests.h"
+#include "group_announce.h"
 #include "group_chats.h"
+#include "group_common.h"
 #include "group_onion_announce.h"
 #include "logger.h"
+#include "mem.h"
 #include "mono_time.h"
+#include "net_crypto.h"
 #include "network.h"
+#include "onion.h"
+#include "onion_announce.h"
+#include "onion_client.h"
 #include "state.h"
 #include "util.h"
 
@@ -757,6 +773,37 @@ int m_set_statusmessage(Messenger *m, const uint8_t *status, uint16_t length)
     return 0;
 }
 
+non_null()
+static bool userstatus_from_int(uint8_t status, Userstatus *out)
+{
+    switch (status) {
+        case USERSTATUS_NONE: {
+            *out = USERSTATUS_NONE;
+            return true;
+        }
+
+        case USERSTATUS_AWAY: {
+            *out = USERSTATUS_AWAY;
+            return true;
+        }
+
+        case USERSTATUS_BUSY: {
+            *out = USERSTATUS_BUSY;
+            return true;
+        }
+
+        case USERSTATUS_INVALID: {
+            *out = USERSTATUS_INVALID;
+            return true;
+        }
+
+        default: {
+            *out = USERSTATUS_INVALID;
+            return false;
+        }
+    }
+}
+
 int m_set_userstatus(Messenger *m, uint8_t status)
 {
     if (status >= USERSTATUS_INVALID) {
@@ -767,7 +814,7 @@ int m_set_userstatus(Messenger *m, uint8_t status)
         return 0;
     }
 
-    m->userstatus = (Userstatus)status;
+    userstatus_from_int(status, &m->userstatus);
 
     for (uint32_t i = 0; i < m->numfriends; ++i) {
         m->friendlist[i].userstatus_sent = false;
@@ -923,7 +970,7 @@ static int set_friend_statusmessage(const Messenger *m, int32_t friendnumber, co
 non_null()
 static void set_friend_userstatus(const Messenger *m, int32_t friendnumber, uint8_t status)
 {
-    m->friendlist[friendnumber].userstatus = (Userstatus)status;
+    userstatus_from_int(status, &m->friendlist[friendnumber].userstatus);
 }
 
 non_null()
@@ -2081,9 +2128,8 @@ static int m_handle_packet_userstatus(Messenger *m, const int i, const uint8_t *
         return 0;
     }
 
-    const Userstatus status = (Userstatus)data[0];
-
-    if (status >= USERSTATUS_INVALID) {
+    Userstatus status;
+    if (!userstatus_from_int(data[0], &status)) {
         return 0;
     }
 
@@ -2329,8 +2375,6 @@ static int m_handle_packet_msi(Messenger *m, const int i, const uint8_t *data, c
 non_null(1, 3) nullable(5)
 static int m_handle_packet_invite_groupchat(Messenger *m, const int i, const uint8_t *data, const uint16_t data_length, void *userdata)
 {
-#ifndef VANILLA_NACL
-
     // first two bytes are messenger packet type and group invite type
     if (data_length < 2 + GC_JOIN_DATA_LENGTH) {
         return 0;
@@ -2351,19 +2395,18 @@ static int m_handle_packet_invite_groupchat(Messenger *m, const int i, const uin
         handle_gc_invite_confirmed_packet(m->group_handler, i, join_data, join_data_len);
     }
 
-#endif // VANILLA_NACL
-
     return 0;
 }
 
 non_null(1, 3) nullable(5)
 static int m_handle_packet(void *object, int i, const uint8_t *temp, uint16_t len, void *userdata)
 {
+    Messenger *m = (Messenger *)object;
+
     if (len == 0) {
         return -1;
     }
 
-    Messenger *m = (Messenger *)object;
     const uint8_t packet_id = temp[0];
     const uint8_t *data = temp + 1;
     const uint16_t data_length = len - 1;
@@ -2533,7 +2576,6 @@ uint32_t messenger_run_interval(const Messenger *m)
  *
  * @retval true if success.
  */
-#ifndef VANILLA_NACL
 non_null()
 static bool self_announce_group(const Messenger *m, GC_Chat *chat, Onion_Friend *onion_friend)
 {
@@ -2609,7 +2651,6 @@ static void do_gc_onion_friends(const Messenger *m)
         }
     }
 }
-#endif  // VANILLA_NACL
 
 /** @brief The main loop that needs to be run at least 20 times per second. */
 void do_messenger(Messenger *m, void *userdata)
@@ -2647,11 +2688,9 @@ void do_messenger(Messenger *m, void *userdata)
     do_onion_client(m->onion_c);
     do_friend_connections(m->fr_c, userdata);
     do_friends(m, userdata);
-#ifndef VANILLA_NACL
     do_gc(m->group_handler, userdata);
     do_gca(m->mono_time, m->group_announce);
     do_gc_onion_friends(m);
-#endif
     m_connection_status_callback(m, userdata);
 
     if (mono_time_get(m->mono_time) > m->lastdump + DUMPING_CLIENTS_FRIENDS_EVERY_N_SECONDS) {
@@ -3134,7 +3173,6 @@ static State_Load_Status friends_list_load(Messenger *m, const uint8_t *data, ui
     return STATE_LOAD_STATUS_CONTINUE;
 }
 
-#ifndef VANILLA_NACL
 non_null()
 static void pack_groupchats(const GC_Session *c, Bin_Pack *bp)
 {
@@ -3155,14 +3193,15 @@ static void pack_groupchats(const GC_Session *c, Bin_Pack *bp)
 non_null()
 static bool pack_groupchats_handler(Bin_Pack *bp, const Logger *log, const void *obj)
 {
-    pack_groupchats((const GC_Session *)obj, bp);
+    const GC_Session *session = (const GC_Session *)obj;
+    pack_groupchats(session, bp);
     return true;  // TODO(iphydf): Return bool from pack functions.
 }
 
 non_null()
 static uint32_t saved_groups_size(const Messenger *m)
 {
-    GC_Session *c = m->group_handler;
+    const GC_Session *c = m->group_handler;
     return bin_pack_obj_size(pack_groupchats_handler, m->log, c);
 }
 
@@ -3231,7 +3270,6 @@ static State_Load_Status groups_load(Messenger *m, const uint8_t *data, uint32_t
 
     return STATE_LOAD_STATUS_CONTINUE;
 }
-#endif /* VANILLA_NACL */
 
 // name state plugin
 non_null()
@@ -3419,9 +3457,7 @@ static void m_register_default_plugins(Messenger *m)
     m_register_state_plugin(m, STATE_TYPE_STATUSMESSAGE, status_message_size, load_status_message,
                             save_status_message);
     m_register_state_plugin(m, STATE_TYPE_STATUS, status_size, load_status, save_status);
-#ifndef VANILLA_NACL
     m_register_state_plugin(m, STATE_TYPE_GROUPS, saved_groups_size, groups_load, groups_save);
-#endif
     m_register_state_plugin(m, STATE_TYPE_TCP_RELAY, tcp_relay_size, load_tcp_relays, save_tcp_relays);
     m_register_state_plugin(m, STATE_TYPE_PATH_NODE, path_node_size, load_path_nodes, save_path_nodes);
 }
@@ -3565,13 +3601,14 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
 
     if (m->net == nullptr) {
         friendreq_kill(m->fr);
-        logger_kill(m->log);
-        mem_delete(mem, m);
 
         if (error != nullptr && net_err == 1) {
+            LOGGER_WARNING(m->log, "network initialisation failed (no ports available)");
             *error = MESSENGER_ERROR_PORT;
         }
 
+        logger_kill(m->log);
+        mem_delete(mem, m);
         return nullptr;
     }
 
@@ -3588,6 +3625,8 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
     m->net_crypto = new_net_crypto(m->log, m->mem, m->rng, m->ns, m->mono_time, m->dht, &options->proxy_info);
 
     if (m->net_crypto == nullptr) {
+        LOGGER_WARNING(m->log, "net_crypto initialisation failed");
+
         kill_dht(m->dht);
         kill_networking(m->net);
         friendreq_kill(m->fr);
@@ -3596,10 +3635,11 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
         return nullptr;
     }
 
-#ifndef VANILLA_NACL
     m->group_announce = new_gca_list();
 
     if (m->group_announce == nullptr) {
+        LOGGER_WARNING(m->log, "DHT group chats initialisation failed");
+
         kill_net_crypto(m->net_crypto);
         kill_dht(m->dht);
         kill_networking(m->net);
@@ -3609,11 +3649,13 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
         return nullptr;
     }
 
-#endif /* VANILLA_NACL */
-
     if (options->dht_announcements_enabled) {
         m->forwarding = new_forwarding(m->log, m->rng, m->mono_time, m->dht);
-        m->announce = new_announcements(m->log, m->mem, m->rng, m->mono_time, m->forwarding);
+        if (m->forwarding != nullptr) {
+            m->announce = new_announcements(m->log, m->mem, m->rng, m->mono_time, m->forwarding);
+        } else {
+            m->announce = nullptr;
+        }
     } else {
         m->forwarding = nullptr;
         m->announce = nullptr;
@@ -3622,16 +3664,18 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
     m->onion = new_onion(m->log, m->mem, m->mono_time, m->rng, m->dht);
     m->onion_a = new_onion_announce(m->log, m->mem, m->rng, m->mono_time, m->dht);
     m->onion_c = new_onion_client(m->log, m->mem, m->rng, m->mono_time, m->net_crypto);
-    m->fr_c = new_friend_connections(m->log, m->mono_time, m->ns, m->onion_c, options->local_discovery_enabled);
+    if (m->onion_c != nullptr) {
+        m->fr_c = new_friend_connections(m->log, m->mono_time, m->ns, m->onion_c, options->local_discovery_enabled);
+    }
 
     if ((options->dht_announcements_enabled && (m->forwarding == nullptr || m->announce == nullptr)) ||
             m->onion == nullptr || m->onion_a == nullptr || m->onion_c == nullptr || m->fr_c == nullptr) {
+        LOGGER_WARNING(m->log, "onion initialisation failed");
+
         kill_onion(m->onion);
         kill_onion_announce(m->onion_a);
         kill_onion_client(m->onion_c);
-#ifndef VANILLA_NACL
         kill_gca(m->group_announce);
-#endif /* VANILLA_NACL */
         kill_friend_connections(m->fr_c);
         kill_announcements(m->announce);
         kill_forwarding(m->forwarding);
@@ -3644,12 +3688,13 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
         return nullptr;
     }
 
-#ifndef VANILLA_NACL
     gca_onion_init(m->group_announce, m->onion_a);
 
     m->group_handler = new_dht_groupchats(m);
 
     if (m->group_handler == nullptr) {
+        LOGGER_WARNING(m->log, "conferences initialisation failed");
+
         kill_onion(m->onion);
         kill_onion_announce(m->onion_a);
         kill_onion_client(m->onion_c);
@@ -3665,8 +3710,6 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
         mem_delete(mem, m);
         return nullptr;
     }
-
-#endif /* VANILLA_NACL */
 
     if (options->tcp_server_port != 0) {
         m->tcp_server = new_tcp_server(m->log, m->mem, m->rng, m->ns, options->ipv6enabled, 1,
@@ -3674,16 +3717,14 @@ Messenger *new_messenger(Mono_Time *mono_time, const Memory *mem, const Random *
                                        m->onion, m->forwarding);
 
         if (m->tcp_server == nullptr) {
+            LOGGER_WARNING(m->log, "TCP server initialisation failed");
+
             kill_onion(m->onion);
             kill_onion_announce(m->onion_a);
-#ifndef VANILLA_NACL
             kill_dht_groupchats(m->group_handler);
-#endif
             kill_friend_connections(m->fr_c);
             kill_onion_client(m->onion_c);
-#ifndef VANILLA_NACL
             kill_gca(m->group_announce);
-#endif
             kill_announcements(m->announce);
             kill_forwarding(m->forwarding);
             kill_net_crypto(m->net_crypto);
@@ -3735,14 +3776,10 @@ void kill_messenger(Messenger *m)
 
     kill_onion(m->onion);
     kill_onion_announce(m->onion_a);
-#ifndef VANILLA_NACL
     kill_dht_groupchats(m->group_handler);
-#endif
     kill_friend_connections(m->fr_c);
     kill_onion_client(m->onion_c);
-#ifndef VANILLA_NACL
     kill_gca(m->group_announce);
-#endif
     kill_announcements(m->announce);
     kill_forwarding(m->forwarding);
     kill_net_crypto(m->net_crypto);
@@ -3753,11 +3790,11 @@ void kill_messenger(Messenger *m)
         clear_receipts(m, i);
     }
 
-    logger_kill(m->log);
     mem_delete(m->mem, m->friendlist);
     friendreq_kill(m->fr);
 
     mem_delete(m->mem, m->options.state_plugins);
+    logger_kill(m->log);
     mem_delete(m->mem, m);
 }
 

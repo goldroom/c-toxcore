@@ -3,7 +3,10 @@ load("@rules_fuzzing//fuzzing:cc_defs.bzl", "cc_fuzz_test")
 load("//tools:no_undefined.bzl", "cc_library")
 
 exports_files(
-    srcs = ["tox.h"],
+    srcs = [
+        "tox.h",
+        "tox_private.h",
+    ],
     visibility = ["//c-toxcore:__pkg__"],
 )
 
@@ -198,6 +201,7 @@ cc_library(
         ":attributes",
         ":ccompat",
         ":mem",
+        ":util",
         "@pthread",
     ],
 )
@@ -227,6 +231,7 @@ cc_library(
     deps = [
         ":ccompat",
         ":crypto_core",
+        ":logger",
         ":mem",
         ":mono_time",
     ],
@@ -366,6 +371,7 @@ cc_test(
 
 cc_fuzz_test(
     name = "DHT_fuzz_test",
+    size = "small",
     srcs = ["DHT_fuzz_test.cc"],
     corpus = ["//tools/toktok-fuzzer/corpus:DHT_fuzz_test"],
     deps = [
@@ -405,6 +411,7 @@ cc_library(
 
 cc_fuzz_test(
     name = "forwarding_fuzz_test",
+    size = "small",
     srcs = ["forwarding_fuzz_test.cc"],
     #corpus = ["//tools/toktok-fuzzer/corpus:forwarding_fuzz_test"],
     deps = [
@@ -603,6 +610,7 @@ cc_library(
 
 cc_fuzz_test(
     name = "group_announce_fuzz_test",
+    size = "small",
     srcs = ["group_announce_fuzz_test.cc"],
     #corpus = ["//tools/toktok-fuzzer/corpus:group_announce_fuzz_test"],
     deps = [
@@ -706,6 +714,7 @@ cc_test(
 
 cc_fuzz_test(
     name = "group_moderation_fuzz_test",
+    size = "small",
     srcs = ["group_moderation_fuzz_test.cc"],
     corpus = ["//tools/toktok-fuzzer/corpus:group_moderation_fuzz_test"],
     deps = [
@@ -862,6 +871,7 @@ cc_test(
 
 cc_fuzz_test(
     name = "tox_events_fuzz_test",
+    size = "small",
     srcs = ["tox_events_fuzz_test.cc"],
     corpus = ["//tools/toktok-fuzzer/corpus:tox_events_fuzz_test"],
     deps = [

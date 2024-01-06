@@ -6,10 +6,9 @@
 
 #include <assert.h>
 #include <stdlib.h>
-#include <string.h>
-#include "../bin_unpack.h"
 
 #include "../bin_pack.h"
+#include "../bin_unpack.h"
 #include "../ccompat.h"
 #include "../tox.h"
 #include "../tox_events.h"
@@ -89,7 +88,7 @@ static bool tox_event_friend_status_unpack(
     }
 
     return bin_unpack_u32(bu, &event->friend_number)
-           && tox_unpack_user_status(bu, &event->status);
+           && tox_user_status_unpack(bu, &event->status);
 }
 
 

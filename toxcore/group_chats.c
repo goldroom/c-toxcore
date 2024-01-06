@@ -9,28 +9,32 @@
 
 #include "group_chats.h"
 
-#include <assert.h>
-
-#ifndef VANILLA_NACL
 #include <sodium.h>
-#endif
 
+#include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "DHT.h"
-#include "LAN_discovery.h"
 #include "Messenger.h"
 #include "TCP_connection.h"
+#include "bin_pack.h"
+#include "bin_unpack.h"
 #include "ccompat.h"
+#include "crypto_core.h"
 #include "friend_connection.h"
+#include "group_announce.h"
 #include "group_common.h"
+#include "group_connection.h"
 #include "group_moderation.h"
 #include "group_pack.h"
+#include "logger.h"
 #include "mono_time.h"
+#include "net_crypto.h"
 #include "network.h"
+#include "onion_announce.h"
+#include "onion_client.h"
 #include "util.h"
-
-#ifndef VANILLA_NACL
 
 /* The minimum size of a plaintext group handshake packet */
 #define GC_MIN_HS_PACKET_PAYLOAD_SIZE (1 + ENC_PUBLIC_KEY_SIZE + SIG_PUBLIC_KEY_SIZE + 1 + 1)
@@ -160,7 +164,7 @@ non_null() static bool self_gc_is_founder(const GC_Chat *chat);
 non_null() static bool group_number_valid(const GC_Session *c, int group_number);
 non_null() static int peer_update(const GC_Chat *chat, const GC_Peer *peer, uint32_t peer_number);
 non_null() static void group_delete(GC_Session *c, GC_Chat *chat);
-non_null() static void group_cleanup(GC_Session *c, GC_Chat *chat);
+non_null() static void group_cleanup(const GC_Session *c, GC_Chat *chat);
 non_null() static bool group_exists(const GC_Session *c, const uint8_t *chat_id);
 non_null() static void add_tcp_relays_to_chat(const GC_Session *c, GC_Chat *chat);
 non_null(1, 2) nullable(4)
@@ -182,7 +186,7 @@ static void kill_group_friend_connection(const GC_Session *c, const GC_Chat *cha
 
 uint16_t gc_get_wrapped_packet_size(uint16_t length, Net_Packet_Type packet_type)
 {
-    assert(length <= MAX_GC_PACKET_CHUNK_SIZE);
+    assert(length <= (packet_type == NET_PACKET_GC_LOSSY ? MAX_GC_CUSTOM_LOSSY_PACKET_SIZE : MAX_GC_PACKET_CHUNK_SIZE));
 
     const uint16_t min_header_size = packet_type == NET_PACKET_GC_LOSSY
                                      ? GC_MIN_LOSSY_PAYLOAD_SIZE
@@ -226,10 +230,20 @@ GC_Connection *get_gc_connection(const GC_Chat *chat, int peer_number)
     return &peer->gconn;
 }
 
-/** Returns the amount of empty padding a packet of designated length should have. */
-static uint16_t group_packet_padding_length(uint16_t length)
+/** Returns the max packet size, not wrapped */
+static uint16_t group_packet_max_packet_size(Net_Packet_Type net_packet_type)
 {
-    return (MAX_GC_PACKET_CHUNK_SIZE - length) % GC_MAX_PACKET_PADDING;
+    if (net_packet_type == NET_PACKET_GC_LOSSY) {
+        return MAX_GC_CUSTOM_LOSSY_PACKET_SIZE;
+    } else {
+        return MAX_GC_PACKET_CHUNK_SIZE;
+    }
+}
+
+/** Returns the amount of empty padding a packet of designated length should have. */
+static uint16_t group_packet_padding_length(uint16_t length, uint16_t max_length)
+{
+    return (max_length - length) % GC_MAX_PACKET_PADDING;
 }
 
 void gc_get_self_nick(const GC_Chat *chat, uint8_t *nick)
@@ -1270,8 +1284,8 @@ static uint16_t unpack_gc_shared_state(GC_SharedState *shared_state, const uint8
     memcpy(&voice_state, data + len_processed, sizeof(uint8_t));
     len_processed += sizeof(uint8_t);
 
-    shared_state->voice_state = (Group_Voice_State)voice_state;
-    shared_state->privacy_state = (Group_Privacy_State)privacy_state;
+    group_voice_state_from_int(voice_state, &shared_state->voice_state);
+    group_privacy_state_from_int(privacy_state, &shared_state->privacy_state);
 
     return len_processed;
 }
@@ -1368,7 +1382,7 @@ static int make_gc_shared_state_packet(const GC_Chat *chat, uint8_t *data, uint1
         return -1;
     }
 
-    return (int)(header_len + packed_len);
+    return header_len + packed_len;
 }
 
 /** @brief Creates a signature for the group's shared state in packed form.
@@ -1483,9 +1497,10 @@ static int group_packet_unwrap(const Logger *log, const GC_Connection *gconn, ui
 int group_packet_wrap(
     const Logger *log, const Random *rng, const uint8_t *self_pk, const uint8_t *shared_key, uint8_t *packet,
     uint16_t packet_size, const uint8_t *data, uint16_t length, uint64_t message_id,
-    uint8_t gp_packet_type, uint8_t net_packet_type)
+    uint8_t gp_packet_type, Net_Packet_Type net_packet_type)
 {
-    const uint16_t padding_len = group_packet_padding_length(length);
+    const uint16_t max_packet_size = group_packet_max_packet_size(net_packet_type);
+    const uint16_t padding_len = group_packet_padding_length(length, max_packet_size);
     const uint16_t min_packet_size = net_packet_type == NET_PACKET_GC_LOSSLESS
                                      ? length + padding_len + CRYPTO_MAC_SIZE + 1 + ENC_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + GC_MESSAGE_ID_BYTES + 1
                                      : length + padding_len + CRYPTO_MAC_SIZE + 1 + ENC_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + 1;
@@ -1495,8 +1510,8 @@ int group_packet_wrap(
         return -1;
     }
 
-    if (length > MAX_GC_PACKET_CHUNK_SIZE) {
-        LOGGER_ERROR(log, "Packet payload size (%u) exceeds maximum (%u)", length, MAX_GC_PACKET_CHUNK_SIZE);
+    if (length > max_packet_size) {
+        LOGGER_ERROR(log, "Packet payload size (%u) exceeds maximum (%u)", length, max_packet_size);
         return -1;
     }
 
@@ -1563,7 +1578,7 @@ non_null()
 static bool send_lossy_group_packet(const GC_Chat *chat, const GC_Connection *gconn, const uint8_t *data,
                                     uint16_t length, uint8_t packet_type)
 {
-    assert(length <= MAX_GC_PACKET_CHUNK_SIZE);
+    assert(length <= MAX_GC_CUSTOM_LOSSY_PACKET_SIZE);
 
     if (!gconn->handshaked || gconn->pending_delete) {
         return false;
@@ -3234,7 +3249,7 @@ static int make_gc_sanctions_list_packet(const GC_Chat *chat, uint8_t *data, uin
         return -1;
     }
 
-    return (int)(length + packed_len);
+    return length + packed_len;
 }
 
 /** @brief Sends the sanctions list to peer.
@@ -3502,6 +3517,63 @@ int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uin
     }
 
     memcpy(public_key, gconn->addr.public_key, ENC_PUBLIC_KEY_SIZE);
+
+    return 0;
+}
+
+/** @brief Puts a string of the IP associated with `ip_port` in `ip_str` if the
+ * connection is direct, otherwise puts a placeholder in the buffer indicating that
+ * the IP cannot be displayed.
+ */
+non_null()
+static void get_gc_ip_ntoa(const IP_Port *ip_port, Ip_Ntoa *ip_str)
+{
+    net_ip_ntoa(&ip_port->ip, ip_str);
+
+    if (!ip_str->ip_is_valid) {
+        ip_str->buf[0] = '-';
+        ip_str->buf[1] = '\0';
+        ip_str->length = 1;
+    }
+}
+
+int gc_get_peer_ip_address_size(const GC_Chat *chat, uint32_t peer_id)
+{
+    const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
+    const GC_Connection *gconn = get_gc_connection(chat, peer_number);
+
+    if (gconn == nullptr) {
+        return -1;
+    }
+
+    const IP_Port *ip_port = peer_number == 0 ? &chat->self_ip_port : &gconn->addr.ip_port;
+
+    Ip_Ntoa ip_str;
+    get_gc_ip_ntoa(ip_port, &ip_str);
+
+    return ip_str.length;
+}
+
+int gc_get_peer_ip_address(const GC_Chat *chat, uint32_t peer_id, uint8_t *ip_addr)
+{
+    const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
+    const GC_Connection *gconn = get_gc_connection(chat, peer_number);
+
+    if (gconn == nullptr) {
+        return -1;
+    }
+
+    if (ip_addr == nullptr) {
+        return -2;
+    }
+
+    const IP_Port *ip_port = peer_number == 0 ? &chat->self_ip_port : &gconn->addr.ip_port;
+
+    Ip_Ntoa ip_str;
+    get_gc_ip_ntoa(ip_port, &ip_str);
+
+    assert(ip_str.length <= IP_NTOA_LEN);
+    memcpy(ip_addr, ip_str.buf, ip_str.length);
 
     return 0;
 }
@@ -7224,7 +7296,9 @@ static int get_new_group_index(GC_Session *c)
 
     c->chats[new_index] = empty_gc_chat;
 
-    memset(&c->chats[new_index].saved_invites, -1, sizeof(c->chats[new_index].saved_invites));
+    for (size_t i = 0; i < sizeof(c->chats[new_index].saved_invites)/sizeof(*c->chats[new_index].saved_invites); ++i) {
+        c->chats[new_index].saved_invites[i] = -1;
+    }
 
     ++c->chats_index;
 
@@ -7279,7 +7353,7 @@ static bool init_gc_tcp_connection(const GC_Session *c, GC_Chat *chat)
 
 /** Initializes default shared state values. */
 non_null()
-static void init_gc_shared_state(GC_Chat *chat, const Group_Privacy_State privacy_state)
+static void init_gc_shared_state(GC_Chat *chat, Group_Privacy_State privacy_state)
 {
     chat->shared_state.maxpeers = MAX_GC_PEERS_DEFAULT;
     chat->shared_state.privacy_state = privacy_state;
@@ -7364,6 +7438,9 @@ static int create_new_group(GC_Session *c, const uint8_t *nick, size_t nick_leng
         return -1;
     }
 
+    init_gc_shared_state(chat, privacy_state);
+    init_gc_moderation(chat);
+
     if (!init_gc_tcp_connection(c, chat)) {
         group_delete(c, chat);
         return -1;
@@ -7383,9 +7460,6 @@ static int create_new_group(GC_Session *c, const uint8_t *nick, size_t nick_leng
     self_gc_set_role(chat, founder ? GR_FOUNDER : GR_USER);
     self_gc_set_confirmed(chat, true);
     self_gc_set_ext_public_key(chat, chat->self_public_key);
-
-    init_gc_shared_state(chat, privacy_state);
-    init_gc_moderation(chat);
 
     return group_number;
 }
@@ -8112,7 +8186,7 @@ GC_Session *new_dht_groupchats(Messenger *m)
     return c;
 }
 
-static void group_cleanup(GC_Session *c, GC_Chat *chat)
+static void group_cleanup(const GC_Session *c, GC_Chat *chat)
 {
     kill_group_friend_connection(c, chat);
 
@@ -8426,4 +8500,3 @@ int gc_add_peers_from_announces(GC_Chat *chat, const GC_Announce *announces, uin
 
     return added_peers;
 }
-#endif  // VANILLA_NACL
