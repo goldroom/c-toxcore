@@ -17,8 +17,8 @@
  *
  * Usage:
  *
- *   bazel build //c-toxcore/testing/fuzzing:protodump_bin && \
- *     bazel-bin/c-toxcore/testing/fuzzing/protodump_bin
+ *   bazel build //c-toxcore/testing/fuzzing:protodump && \
+ *     bazel-bin/c-toxcore/testing/fuzzing/protodump
  */
 #include <array>
 #include <cassert>
@@ -33,7 +33,7 @@
 #include "../../toxcore/tox_private.h"
 #include "../../toxcore/tox_struct.h"
 #include "../../toxcore/util.h"
-#include "fuzz_support.h"
+#include "fuzz_support.hh"
 
 namespace {
 
@@ -45,73 +45,75 @@ namespace {
  */
 constexpr uint32_t MESSAGE_COUNT = 5;
 
+struct State {
+    Tox *tox;
+    uint32_t done;
+};
+
 void setup_callbacks(Tox_Dispatch *dispatch)
 {
     tox_events_callback_conference_connected(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Connected *event, void *user_data) {
+        dispatch, [](const Tox_Event_Conference_Connected *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_conference_connected(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Connected *event, void *user_data) {
+        dispatch, [](const Tox_Event_Conference_Connected *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_conference_invite(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Invite *event, void *user_data) {
+        dispatch, [](const Tox_Event_Conference_Invite *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_conference_message(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Message *event, void *user_data) {
+        dispatch, [](const Tox_Event_Conference_Message *event, void *user_data) {
             assert(event == nullptr);
         });
-    tox_events_callback_conference_peer_list_changed(dispatch,
-        [](Tox *tox, const Tox_Event_Conference_Peer_List_Changed *event, void *user_data) {
+    tox_events_callback_conference_peer_list_changed(
+        dispatch, [](const Tox_Event_Conference_Peer_List_Changed *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_conference_peer_name(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Peer_Name *event, void *user_data) {
+        dispatch, [](const Tox_Event_Conference_Peer_Name *event, void *user_data) {
             assert(event == nullptr);
         });
-    tox_events_callback_conference_title(
-        dispatch, [](Tox *tox, const Tox_Event_Conference_Title *event, void *user_data) {
-            assert(event == nullptr);
-        });
+    tox_events_callback_conference_title(dispatch,
+        [](const Tox_Event_Conference_Title *event, void *user_data) { assert(event == nullptr); });
     tox_events_callback_file_chunk_request(
-        dispatch, [](Tox *tox, const Tox_Event_File_Chunk_Request *event, void *user_data) {
+        dispatch, [](const Tox_Event_File_Chunk_Request *event, void *user_data) {
             assert(event == nullptr);
         });
-    tox_events_callback_file_recv(
-        dispatch, [](Tox *tox, const Tox_Event_File_Recv *event, void *user_data) {
-            assert(event == nullptr);
-        });
-    tox_events_callback_file_recv_chunk(
-        dispatch, [](Tox *tox, const Tox_Event_File_Recv_Chunk *event, void *user_data) {
-            assert(event == nullptr);
-        });
+    tox_events_callback_file_recv(dispatch,
+        [](const Tox_Event_File_Recv *event, void *user_data) { assert(event == nullptr); });
+    tox_events_callback_file_recv_chunk(dispatch,
+        [](const Tox_Event_File_Recv_Chunk *event, void *user_data) { assert(event == nullptr); });
     tox_events_callback_file_recv_control(
-        dispatch, [](Tox *tox, const Tox_Event_File_Recv_Control *event, void *user_data) {
+        dispatch, [](const Tox_Event_File_Recv_Control *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_friend_connection_status(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Connection_Status *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Connection_Status *event, void *user_data) {
+            State *state = static_cast<State *>(user_data);
             // OK: friend came online.
             const uint32_t friend_number
                 = tox_event_friend_connection_status_get_friend_number(event);
             assert(friend_number == 0);
             const uint8_t message = 'A';
             Tox_Err_Friend_Send_Message err;
-            tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, &message, 1, &err);
+            tox_friend_send_message(
+                state->tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, &message, 1, &err);
             assert(err == TOX_ERR_FRIEND_SEND_MESSAGE_OK);
         });
     tox_events_callback_friend_lossless_packet(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Lossless_Packet *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Lossless_Packet *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_friend_lossy_packet(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Lossy_Packet *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Lossy_Packet *event, void *user_data) {
             assert(event == nullptr);
         });
     tox_events_callback_friend_message(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Message *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Message *event, void *user_data) {
+            State *state = static_cast<State *>(user_data);
             const uint32_t friend_number = tox_event_friend_message_get_friend_number(event);
             assert(friend_number == 0);
             const uint32_t message_length = tox_event_friend_message_get_message_length(event);
@@ -119,61 +121,63 @@ void setup_callbacks(Tox_Dispatch *dispatch)
             const uint8_t *message = tox_event_friend_message_get_message(event);
             const uint8_t reply = message[0] + 1;
             Tox_Err_Friend_Send_Message err;
-            tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, &reply, 1, &err);
+            tox_friend_send_message(
+                state->tox, friend_number, TOX_MESSAGE_TYPE_NORMAL, &reply, 1, &err);
             assert(err == TOX_ERR_FRIEND_SEND_MESSAGE_OK);
         });
     tox_events_callback_friend_name(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Name *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Name *event, void *user_data) {
             const uint32_t friend_number = tox_event_friend_name_get_friend_number(event);
             assert(friend_number == 0);
         });
     tox_events_callback_friend_read_receipt(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Read_Receipt *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Read_Receipt *event, void *user_data) {
+            State *state = static_cast<State *>(user_data);
             const uint32_t friend_number = tox_event_friend_read_receipt_get_friend_number(event);
             assert(friend_number == 0);
             const uint32_t message_id = tox_event_friend_read_receipt_get_message_id(event);
-            uint32_t *done = static_cast<uint32_t *>(user_data);
-            *done = std::max(*done, message_id);
+            state->done = std::max(state->done, message_id);
         });
     tox_events_callback_friend_request(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Request *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Request *event, void *user_data) {
+            State *state = static_cast<State *>(user_data);
             Tox_Err_Friend_Add err;
-            tox_friend_add_norequest(tox, tox_event_friend_request_get_public_key(event), &err);
+            tox_friend_add_norequest(
+                state->tox, tox_event_friend_request_get_public_key(event), &err);
             assert(err == TOX_ERR_FRIEND_ADD_OK || err == TOX_ERR_FRIEND_ADD_OWN_KEY
                 || err == TOX_ERR_FRIEND_ADD_ALREADY_SENT
                 || err == TOX_ERR_FRIEND_ADD_BAD_CHECKSUM);
         });
     tox_events_callback_friend_status(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Status *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Status *event, void *user_data) {
             const uint32_t friend_number = tox_event_friend_status_get_friend_number(event);
             assert(friend_number == 0);
         });
     tox_events_callback_friend_status_message(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Status_Message *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Status_Message *event, void *user_data) {
             const uint32_t friend_number = tox_event_friend_status_message_get_friend_number(event);
             assert(friend_number == 0);
         });
     tox_events_callback_friend_typing(
-        dispatch, [](Tox *tox, const Tox_Event_Friend_Typing *event, void *user_data) {
+        dispatch, [](const Tox_Event_Friend_Typing *event, void *user_data) {
             const uint32_t friend_number = tox_event_friend_typing_get_friend_number(event);
             assert(friend_number == 0);
             assert(!tox_event_friend_typing_get_typing(event));
         });
     tox_events_callback_self_connection_status(
-        dispatch, [](Tox *tox, const Tox_Event_Self_Connection_Status *event, void *user_data) {
+        dispatch, [](const Tox_Event_Self_Connection_Status *event, void *user_data) {
             // OK: we got connected.
         });
 }
 
-void dump(std::vector<uint8_t> &recording, const char *filename)
+void dump(std::vector<uint8_t> recording, const char *filename)
 {
     std::printf("%zu bytes: %s\n", recording.size(), filename);
     std::ofstream(filename, std::ios::binary)
         .write(reinterpret_cast<const char *>(recording.data()), recording.size());
-    recording.clear();
 }
 
-void RecordBootstrap()
+void RecordBootstrap(const char *init, const char *bootstrap)
 {
     Record_System::Global global;
 
@@ -236,8 +240,8 @@ void RecordBootstrap()
     assert(dispatch != nullptr);
     setup_callbacks(dispatch);
 
-    uint32_t done1 = 0;
-    uint32_t done2 = 0;
+    State state1 = {tox1, 0};
+    State state2 = {tox2, 0};
 
     const auto iterate = [&](uint8_t clock_increment) {
         Tox_Err_Events_Iterate error_iterate;
@@ -245,12 +249,12 @@ void RecordBootstrap()
 
         events = tox_events_iterate(tox1, true, &error_iterate);
         assert(tox_events_equal(sys1.sys.get(), events, events));
-        tox_dispatch_invoke(dispatch, events, tox1, &done1);
+        tox_dispatch_invoke(dispatch, events, &state1);
         tox_events_free(events);
 
         events = tox_events_iterate(tox2, true, &error_iterate);
         assert(tox_events_equal(sys2.sys.get(), events, events));
-        tox_dispatch_invoke(dispatch, events, tox2, &done2);
+        tox_dispatch_invoke(dispatch, events, &state2);
         tox_events_free(events);
 
         // Move the clock forward a decent amount so all the time-based checks
@@ -258,13 +262,17 @@ void RecordBootstrap()
         sys1.clock += clock_increment;
         sys2.clock += clock_increment;
 
-        sys1.recording.push_back(clock_increment);
-        sys2.recording.push_back(clock_increment);
+        if (Fuzz_Data::DEBUG) {
+            printf("tox1: rng: %d (for clock)\n", clock_increment);
+            printf("tox2: rng: %d (for clock)\n", clock_increment);
+        }
+        sys1.push(clock_increment);
+        sys2.push(clock_increment);
     };
 
     while (tox_self_get_connection_status(tox1) == TOX_CONNECTION_NONE
         || tox_self_get_connection_status(tox2) == TOX_CONNECTION_NONE) {
-        if (DEBUG) {
+        if (Fuzz_Data::DEBUG) {
             std::printf("tox1: %d, tox2: %d\n", tox_self_get_connection_status(tox1),
                 tox_self_get_connection_status(tox2));
         }
@@ -279,7 +287,7 @@ void RecordBootstrap()
 
     while (tox_friend_get_connection_status(tox2, friend_number, nullptr) == TOX_CONNECTION_NONE
         || tox_friend_get_connection_status(tox1, 0, nullptr) == TOX_CONNECTION_NONE) {
-        if (DEBUG) {
+        if (Fuzz_Data::DEBUG) {
             std::printf("tox1: %d, tox2: %d, tox1 -> tox2: %d, tox2 -> tox1: %d\n",
                 tox_self_get_connection_status(tox1), tox_self_get_connection_status(tox2),
                 tox_friend_get_connection_status(tox1, 0, nullptr),
@@ -290,10 +298,10 @@ void RecordBootstrap()
 
     std::printf("tox clients connected\n");
 
-    dump(sys1.recording, "tools/toktok-fuzzer/init/e2e_fuzz_test.dat");
+    dump(sys1.take_recording(), init);
 
-    while (done1 < MESSAGE_COUNT && done2 < MESSAGE_COUNT) {
-        if (DEBUG) {
+    while (state1.done < MESSAGE_COUNT && state2.done < MESSAGE_COUNT) {
+        if (Fuzz_Data::DEBUG) {
             std::printf("tox1: %d, tox2: %d, tox1 -> tox2: %d, tox2 -> tox1: %d\n",
                 tox_self_get_connection_status(tox1), tox_self_get_connection_status(tox2),
                 tox_friend_get_connection_status(tox1, 0, nullptr),
@@ -308,9 +316,18 @@ void RecordBootstrap()
     tox_kill(tox2);
     tox_kill(tox1);
 
-    dump(sys1.recording, "tools/toktok-fuzzer/corpus/e2e_fuzz_test/bootstrap.dat");
+    dump(sys1.recording(), bootstrap);
 }
 
 }
 
-int main(void) { RecordBootstrap(); }
+int main(int argc, char *argv[])
+{
+    const char *init = "tools/toktok-fuzzer/init/e2e_fuzz_test.dat";
+    const char *bootstrap = "tools/toktok-fuzzer/corpus/e2e_fuzz_test/bootstrap.dat";
+    if (argc == 3) {
+        init = argv[1];
+        bootstrap = argv[2];
+    }
+    RecordBootstrap(init, bootstrap);
+}

@@ -14,12 +14,15 @@
 #include <stdint.h>
 
 #include "TCP_connection.h"
+#include "attributes.h"
 #include "bin_pack.h"
 #include "bin_unpack.h"
+#include "crypto_core.h"
 #include "group_announce.h"
 #include "group_common.h"
 #include "group_connection.h"
 #include "logger.h"
+#include "network.h"
 
 #define GC_PING_TIMEOUT 12
 #define GC_SEND_IP_PORT_INTERVAL (GC_PING_TIMEOUT * 5)
@@ -179,7 +182,7 @@ int gc_send_message(const GC_Chat *chat, const uint8_t *message, uint16_t length
  * Returns -6 if the packet fails to send.
  */
 non_null()
-int gc_send_private_message(const GC_Chat *chat, uint32_t peer_id, uint8_t type, const uint8_t *message,
+int gc_send_private_message(const GC_Chat *chat, GC_Peer_Id peer_id, uint8_t type, const uint8_t *message,
                             uint16_t length);
 
 /** @brief Sends a custom packet to the group. If lossless is true, the packet will be lossless.
@@ -190,6 +193,7 @@ int gc_send_private_message(const GC_Chat *chat, uint32_t peer_id, uint8_t type,
  * Returns -1 if the message is too long.
  * Returns -2 if the message pointer is NULL or length is zero.
  * Returns -3 if the sender has the observer role.
+ * Returns -4 if the packet did not successfully send to any peer.
  */
 non_null()
 int gc_send_custom_packet(const GC_Chat *chat, bool lossless, const uint8_t *data, uint16_t length);
@@ -206,7 +210,7 @@ int gc_send_custom_packet(const GC_Chat *chat, bool lossless, const uint8_t *dat
  * @retval -5 if the packet fails to send.
  */
 non_null()
-int gc_send_custom_private_packet(const GC_Chat *chat, bool lossless, uint32_t peer_id, const uint8_t *message,
+int gc_send_custom_private_packet(const GC_Chat *chat, bool lossless, GC_Peer_Id peer_id, const uint8_t *message,
                                   uint16_t length);
 
 /** @brief Sets ignore for peer_id.
@@ -216,7 +220,7 @@ int gc_send_custom_private_packet(const GC_Chat *chat, bool lossless, uint32_t p
  * Returns -2 if the caller attempted to ignore himself.
  */
 non_null()
-int gc_set_ignore(const GC_Chat *chat, uint32_t peer_id, bool ignore);
+int gc_set_ignore(const GC_Chat *chat, GC_Peer_Id peer_id, bool ignore);
 
 /** @brief Sets the group topic and broadcasts it to the group.
  *
@@ -341,7 +345,7 @@ uint8_t gc_get_self_status(const GC_Chat *chat);
 
 /** @brief Returns your own peer id. */
 non_null()
-uint32_t gc_get_self_peer_id(const GC_Chat *chat);
+GC_Peer_Id gc_get_self_peer_id(const GC_Chat *chat);
 
 /** @brief Copies self public key to `public_key`.
  *
@@ -364,7 +368,7 @@ void gc_get_self_public_key(const GC_Chat *chat, uint8_t *public_key);
  * Returns false if peer_id is invalid.
  */
 non_null(1) nullable(3)
-bool gc_get_peer_nick(const GC_Chat *chat, uint32_t peer_id, uint8_t *name);
+bool gc_get_peer_nick(const GC_Chat *chat, GC_Peer_Id peer_id, uint8_t *name);
 
 /** @brief Returns the length of the nick for the peer designated by `peer_id`.
  * Returns -1 if peer_id is invalid.
@@ -373,7 +377,7 @@ bool gc_get_peer_nick(const GC_Chat *chat, uint32_t peer_id, uint8_t *name);
  * nick_change callback.
  */
 non_null()
-int gc_get_peer_nick_size(const GC_Chat *chat, uint32_t peer_id);
+int gc_get_peer_nick_size(const GC_Chat *chat, GC_Peer_Id peer_id);
 
 /** @brief Copies peer_id's public key to `public_key`.
  *
@@ -388,13 +392,13 @@ int gc_get_peer_nick_size(const GC_Chat *chat, uint32_t peer_id);
  * Returns -2 if `public_key` is null.
  */
 non_null(1) nullable(3)
-int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uint8_t *public_key);
+int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, GC_Peer_Id peer_id, uint8_t *public_key);
 
 /** @brief Returns the length of the IP address for the peer designated by `peer_id`.
  * Returns -1 if peer_id is invalid.
  */
 non_null()
-int gc_get_peer_ip_address_size(const GC_Chat *chat, uint32_t peer_id);
+int gc_get_peer_ip_address_size(const GC_Chat *chat, GC_Peer_Id peer_id);
 
 /** @brief Copies peer_id's IP address to `ip_addr`.
  *
@@ -411,7 +415,7 @@ int gc_get_peer_ip_address_size(const GC_Chat *chat, uint32_t peer_id);
  * Returns -2 if `ip_addr` is null.
  */
 non_null(1) nullable(3)
-int gc_get_peer_ip_address(const GC_Chat *chat, uint32_t peer_id, uint8_t *ip_addr);
+int gc_get_peer_ip_address(const GC_Chat *chat, GC_Peer_Id peer_id, uint8_t *ip_addr);
 
 /** @brief Gets the connection status for peer associated with `peer_id`.
  *
@@ -425,7 +429,7 @@ int gc_get_peer_ip_address(const GC_Chat *chat, uint32_t peer_id, uint8_t *ip_ad
  * Note: Return values must correspond to Tox_Connection enum in API.
  */
 non_null()
-unsigned int gc_get_peer_connection_status(const GC_Chat *chat, uint32_t peer_id);
+unsigned int gc_get_peer_connection_status(const GC_Chat *chat, GC_Peer_Id peer_id);
 
 /** @brief Sets the caller's status to `status`.
  *
@@ -443,7 +447,7 @@ int gc_set_self_status(const Messenger *m, int group_number, Group_Peer_Status s
  * callback.
  */
 non_null()
-uint8_t gc_get_status(const GC_Chat *chat, uint32_t peer_id);
+uint8_t gc_get_status(const GC_Chat *chat, GC_Peer_Id peer_id);
 
 /** @brief Returns the group role of peer designated by `peer_id`.
  * Returns UINT8_MAX on failure.
@@ -451,7 +455,7 @@ uint8_t gc_get_status(const GC_Chat *chat, uint32_t peer_id);
  * The role returned is equal to the last role received through the moderation callback.
  */
 non_null()
-uint8_t gc_get_role(const GC_Chat *chat, uint32_t peer_id);
+uint8_t gc_get_role(const GC_Chat *chat, GC_Peer_Id peer_id);
 
 /** @brief Sets the role of peer_id. role must be one of: GR_MODERATOR, GR_USER, GR_OBSERVER
  *
@@ -464,7 +468,7 @@ uint8_t gc_get_role(const GC_Chat *chat, uint32_t peer_id);
  * Returns -6 if the caller attempted to kick himself.
  */
 non_null()
-int gc_set_peer_role(const Messenger *m, int group_number, uint32_t peer_id, Group_Role new_role);
+int gc_set_peer_role(const Messenger *m, int group_number, GC_Peer_Id peer_id, Group_Role new_role);
 
 /** @brief Sets the group password and distributes the new shared state to the group.
  *
@@ -559,7 +563,7 @@ int gc_founder_set_max_peers(GC_Chat *chat, uint16_t max_peers);
  * Returns -6 if the caller attempted to kick himself.
  */
 non_null()
-int gc_kick_peer(const Messenger *m, int group_number, uint32_t peer_id);
+int gc_kick_peer(const Messenger *m, int group_number, GC_Peer_Id peer_id);
 
 /** @brief Copies the chat_id to dest. If dest is null this function has no effect.
  *
@@ -567,7 +571,6 @@ int gc_kick_peer(const Messenger *m, int group_number, uint32_t peer_id);
  */
 non_null(1) nullable(2)
 void gc_get_chat_id(const GC_Chat *chat, uint8_t *dest);
-
 
 /** Group callbacks */
 non_null(1) nullable(2) void gc_callback_message(const Messenger *m, gc_message_cb *function);
@@ -805,4 +808,4 @@ GC_Chat *gc_get_group_by_public_key(const GC_Session *c, const uint8_t *public_k
 non_null()
 int gc_add_peers_from_announces(GC_Chat *chat, const GC_Announce *announces, uint8_t gc_announces_count);
 
-#endif  // C_TOXCORE_TOXCORE_GROUP_CHATS_H
+#endif /* C_TOXCORE_TOXCORE_GROUP_CHATS_H */

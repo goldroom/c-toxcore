@@ -96,37 +96,41 @@ static void peers_cleanup(Peers *peers)
     free(peers);
 }
 
-static void group_peer_join_handler(Tox *tox, uint32_t group_number, uint32_t peer_id, void *user_data)
+static void group_peer_join_handler(const Tox_Event_Group_Peer_Join *event, void *user_data)
 {
     AutoTox *autotox = (AutoTox *)user_data;
     ck_assert(autotox != nullptr);
 
     State *state = (State *)autotox->state;
+
+    const uint32_t peer_id = tox_event_group_peer_join_get_peer_id(event);
 
     ck_assert(add_peer(state->peers, peer_id) == 0);
 
 }
 
-static void group_peer_exit_handler(Tox *tox, uint32_t groupnumber, uint32_t peer_id, Tox_Group_Exit_Type exit_type,
-                                    const uint8_t *name, size_t name_length, const uint8_t *part_message,
-                                    size_t length, void *user_data)
+static void group_peer_exit_handler(const Tox_Event_Group_Peer_Exit *event, void *user_data)
 {
     AutoTox *autotox = (AutoTox *)user_data;
     ck_assert(autotox != nullptr);
 
     State *state = (State *)autotox->state;
+
+    const uint32_t peer_id = tox_event_group_peer_exit_get_peer_id(event);
 
     ck_assert(del_peer(state->peers, peer_id) == 0);
 
 }
 
-static void group_topic_handler(Tox *tox, uint32_t groupnumber, uint32_t peer_id, const uint8_t *topic,
-                                size_t length, void *user_data)
+static void group_topic_handler(const Tox_Event_Group_Topic *event, void *user_data)
 {
     AutoTox *autotox = (AutoTox *)user_data;
     ck_assert(autotox != nullptr);
 
     State *state = (State *)autotox->state;
+
+    const uint8_t *topic = tox_event_group_topic_get_topic(event);
+    const size_t length = tox_event_group_topic_get_topic_length(event);
 
     ck_assert(length <= TOX_GROUP_MAX_TOPIC_LENGTH);
 
@@ -331,13 +335,13 @@ static void topic_spam(const Random *rng, AutoTox *autotoxes, uint32_t num_peers
 static void group_sync_test(AutoTox *autotoxes)
 {
     ck_assert(NUM_GROUP_TOXES >= 5);
-    const Random *rng = system_random();
+    const Random *rng = os_random();
     ck_assert(rng != nullptr);
 
     for (size_t i = 0; i < NUM_GROUP_TOXES; ++i) {
-        tox_callback_group_peer_join(autotoxes[i].tox, group_peer_join_handler);
-        tox_callback_group_topic(autotoxes[i].tox, group_topic_handler);
-        tox_callback_group_peer_exit(autotoxes[i].tox, group_peer_exit_handler);
+        tox_events_callback_group_peer_join(autotoxes[i].dispatch, group_peer_join_handler);
+        tox_events_callback_group_topic(autotoxes[i].dispatch, group_topic_handler);
+        tox_events_callback_group_peer_exit(autotoxes[i].dispatch, group_peer_exit_handler);
 
         State *state = (State *)autotoxes[i].state;
         state->peers = (Peers *)calloc(1, sizeof(Peers));

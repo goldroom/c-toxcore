@@ -13,8 +13,14 @@
 
 #include "DHT.h"
 #include "LAN_discovery.h"
+#include "TCP_client.h"
 #include "TCP_connection.h"
+#include "attributes.h"
+#include "crypto_core.h"
 #include "logger.h"
+#include "mem.h"
+#include "mono_time.h"
+#include "network.h"
 
 /*** Crypto payloads. */
 
@@ -44,7 +50,6 @@
 /*** Messages. */
 
 typedef enum Packet_Id {
-    PACKET_ID_PADDING            = 0, // Denotes padding
     PACKET_ID_REQUEST            = 1, // Used to request unreceived packets
     PACKET_ID_KILL               = 2, // Used to kill connection
 
@@ -167,7 +172,7 @@ typedef struct New_Connection {
 typedef int connection_status_cb(void *object, int id, bool status, void *userdata);
 typedef int connection_data_cb(void *object, int id, const uint8_t *data, uint16_t length, void *userdata);
 typedef int connection_lossy_data_cb(void *object, int id, const uint8_t *data, uint16_t length, void *userdata);
-typedef void dht_pk_cb(void *data, int32_t number, const uint8_t *dht_public_key, void *userdata);
+typedef void dht_pk_cb(void *object, int32_t number, const uint8_t *dht_public_key, void *userdata);
 typedef int new_connection_cb(void *object, const New_Connection *n_c);
 
 /** @brief Set function to be called when someone requests a new connection to us.
@@ -231,7 +236,6 @@ int connection_status_handler(const Net_Crypto *c, int crypt_connection_id,
 non_null()
 int connection_data_handler(const Net_Crypto *c, int crypt_connection_id,
                             connection_data_cb *connection_data_callback, void *object, int id);
-
 
 /** @brief Set function to be called when connection with crypt_connection_id receives a lossy data packet of length.
  *
@@ -450,4 +454,4 @@ void kill_net_crypto(Net_Crypto *c);
 //static void handshake_zero(struct noise_handshake *handshake);
 
 
-#endif
+#endif /* C_TOXCORE_TOXCORE_NET_CRYPTO_H */

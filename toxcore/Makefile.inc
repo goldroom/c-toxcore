@@ -1,8 +1,7 @@
 lib_LTLIBRARIES += libtoxcore.la
 
 libtoxcore_la_include_HEADERS = \
-                        ../toxcore/tox.h \
-                        ../toxcore/tox_private.h
+                        ../toxcore/tox.h
 
 libtoxcore_la_includedir = $(includedir)/tox
 
@@ -21,6 +20,9 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/events/conference_peer_list_changed.c \
                         ../toxcore/events/conference_peer_name.c \
                         ../toxcore/events/conference_title.c \
+                        ../toxcore/events/dht_get_nodes_response.c \
+                        ../toxcore/events/events_alloc.c \
+                        ../toxcore/events/events_alloc.h \
                         ../toxcore/events/file_chunk_request.c \
                         ../toxcore/events/file_recv.c \
                         ../toxcore/events/file_recv_chunk.c \
@@ -35,9 +37,25 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/events/friend_status.c \
                         ../toxcore/events/friend_status_message.c \
                         ../toxcore/events/friend_typing.c \
-                        ../toxcore/events/events_alloc.c \
-                        ../toxcore/events/events_alloc.h \
                         ../toxcore/events/self_connection_status.c \
+                        ../toxcore/events/group_custom_packet.c \
+                        ../toxcore/events/group_custom_private_packet.c \
+                        ../toxcore/events/group_invite.c \
+                        ../toxcore/events/group_join_fail.c \
+                        ../toxcore/events/group_message.c \
+                        ../toxcore/events/group_moderation.c \
+                        ../toxcore/events/group_password.c \
+                        ../toxcore/events/group_peer_exit.c \
+                        ../toxcore/events/group_peer_join.c \
+                        ../toxcore/events/group_peer_limit.c \
+                        ../toxcore/events/group_peer_name.c \
+                        ../toxcore/events/group_peer_status.c \
+                        ../toxcore/events/group_privacy_state.c \
+                        ../toxcore/events/group_private_message.c \
+                        ../toxcore/events/group_self_join.c \
+                        ../toxcore/events/group_topic.c \
+                        ../toxcore/events/group_topic_lock.c \
+                        ../toxcore/events/group_voice_state.c \
                         ../toxcore/DHT.h \
                         ../toxcore/DHT.c \
                         ../toxcore/mem.h \
@@ -48,6 +66,8 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/network.c \
                         ../toxcore/crypto_core.h \
                         ../toxcore/crypto_core.c \
+                        ../toxcore/crypto_core_pack.h \
+                        ../toxcore/crypto_core_pack.c \
                         ../toxcore/timed_auth.h \
                         ../toxcore/timed_auth.c \
                         ../toxcore/ping_array.h \
@@ -72,8 +92,12 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/tox.c \
                         ../toxcore/tox_dispatch.h \
                         ../toxcore/tox_dispatch.c \
+                        ../toxcore/tox_event.h \
+                        ../toxcore/tox_event.c \
                         ../toxcore/tox_events.h \
                         ../toxcore/tox_events.c \
+                        ../toxcore/tox_pack.h \
+                        ../toxcore/tox_pack.c \
                         ../toxcore/tox_unpack.h \
                         ../toxcore/tox_unpack.c \
                         ../toxcore/tox_private.c \

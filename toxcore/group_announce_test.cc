@@ -2,13 +2,18 @@
 
 #include <gtest/gtest.h>
 
+#include "DHT.h"
+#include "crypto_core.h"
+#include "logger.h"
+#include "mem_test_util.hh"
 #include "mono_time.h"
+#include "network.h"
 
 namespace {
 
 struct Announces : ::testing::Test {
 protected:
-    const Memory *mem_ = system_memory();
+    Test_Memory mem_;
     uint64_t clock_ = 1000;
     Mono_Time *mono_time_ = nullptr;
     GC_Announces_List *gca_ = nullptr;

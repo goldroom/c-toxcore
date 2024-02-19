@@ -136,6 +136,8 @@ if(MIN_LOGGER_LEVEL)
   endif()
 endif()
 
+option(EXPERIMENTAL_API "Install experimental header file with unstable API" OFF)
+
 option(USE_IPV6 "Use IPv6 in tests" ON)
 if(NOT USE_IPV6)
   add_definitions(-DUSE_IPV6=0)
@@ -160,21 +162,7 @@ if(BOOTSTRAP_DAEMON AND WIN32)
   set(BOOTSTRAP_DAEMON OFF)
 endif()
 
-# Enabling this breaks all other tests and no network connections will be possible
 option(BUILD_FUZZ_TESTS "Build fuzzing harnesses" OFF)
-if(BUILD_FUZZ_TESTS)
-    message(STATUS "Building in fuzz testing mode, no network connection will be possible")
-    # Disable everything we can
-    set(AUTOTEST OFF)
-    set(BUILD_MISC_TESTS OFF)
-    set(BUILD_FUN_UTILS OFF)
-    set(ENABLE_SHARED OFF)
-    set(MUST_BUILD_TOXAV OFF)
-    set(BUILD_TOXAV OFF)
-    set(BOOTSTRAP_DAEMON OFF)
-    set(DHT_BOOTSTRAP OFF)
-endif()
-
 
 if(MSVC)
   option(MSVC_STATIC_SODIUM "Whether to link libsodium statically for MSVC" OFF)
@@ -237,6 +225,8 @@ set(toxcore_SOURCES
   toxcore/ccompat.h
   toxcore/crypto_core.c
   toxcore/crypto_core.h
+  toxcore/crypto_core_pack.c
+  toxcore/crypto_core_pack.h
   toxcore/DHT.c
   toxcore/DHT.h
   toxcore/events/conference_connected.c
@@ -245,6 +235,7 @@ set(toxcore_SOURCES
   toxcore/events/conference_peer_list_changed.c
   toxcore/events/conference_peer_name.c
   toxcore/events/conference_title.c
+  toxcore/events/dht_get_nodes_response.c
   toxcore/events/events_alloc.c
   toxcore/events/events_alloc.h
   toxcore/events/file_chunk_request.c
@@ -262,6 +253,24 @@ set(toxcore_SOURCES
   toxcore/events/friend_status_message.c
   toxcore/events/friend_typing.c
   toxcore/events/self_connection_status.c
+  toxcore/events/group_custom_packet.c
+  toxcore/events/group_custom_private_packet.c
+  toxcore/events/group_invite.c
+  toxcore/events/group_join_fail.c
+  toxcore/events/group_message.c
+  toxcore/events/group_moderation.c
+  toxcore/events/group_password.c
+  toxcore/events/group_peer_exit.c
+  toxcore/events/group_peer_join.c
+  toxcore/events/group_peer_limit.c
+  toxcore/events/group_peer_name.c
+  toxcore/events/group_peer_status.c
+  toxcore/events/group_privacy_state.c
+  toxcore/events/group_private_message.c
+  toxcore/events/group_self_join.c
+  toxcore/events/group_topic.c
+  toxcore/events/group_topic_lock.c
+  toxcore/events/group_voice_state.c
   toxcore/forwarding.c
   toxcore/forwarding.h
   toxcore/friend_connection.c
@@ -327,11 +336,15 @@ set(toxcore_SOURCES
   toxcore/tox.c
   toxcore/tox_dispatch.c
   toxcore/tox_dispatch.h
+  toxcore/tox_event.c
+  toxcore/tox_event.h
   toxcore/tox_events.c
   toxcore/tox_events.h
   toxcore/tox.h
   toxcore/tox_private.c
   toxcore/tox_private.h
+  toxcore/tox_pack.c
+  toxcore/tox_pack.h
   toxcore/tox_unpack.c
   toxcore/tox_unpack.h
   toxcore/util.c
@@ -348,8 +361,11 @@ set(toxcore_PKGCONFIG_REQUIRES ${toxcore_PKGCONFIG_REQUIRES} libsodium)
 set(toxcore_API_HEADERS
   ${toxcore_SOURCE_DIR}/toxcore/tox.h^tox
   ${toxcore_SOURCE_DIR}/toxcore/tox_events.h^tox
-  ${toxcore_SOURCE_DIR}/toxcore/tox_dispatch.h^tox
-  ${toxcore_SOURCE_DIR}/toxcore/tox_private.h^tox)
+  ${toxcore_SOURCE_DIR}/toxcore/tox_dispatch.h^tox)
+if(EXPERIMENTAL_API)
+  set(toxcore_API_HEADERS ${toxcore_API_HEADERS}
+    ${toxcore_SOURCE_DIR}/toxcore/tox_private.h^tox)
+endif()
 
 ################################################################################
 #
@@ -448,20 +464,33 @@ endif()
 ################################################################################
 
 # Create combined library from all the sources.
-add_module(toxcore ${toxcore_SOURCES})
+if(ENABLE_SHARED)
+  add_library(toxcore_shared SHARED ${toxcore_SOURCES})
+  set_target_properties(toxcore_shared PROPERTIES OUTPUT_NAME toxcore)
+  target_link_libraries(toxcore_shared PRIVATE ${toxcore_LINK_LIBRARIES})
+  target_link_directories(toxcore_shared PUBLIC ${toxcore_LINK_DIRECTORIES})
+  target_include_directories(toxcore_shared SYSTEM PRIVATE ${toxcore_INCLUDE_DIRECTORIES})
+  target_compile_options(toxcore_shared PRIVATE ${toxcore_COMPILE_OPTIONS})
+endif()
 
-# Link it to all dependencies.
-if(TARGET toxcore_static)
+if(ENABLE_STATIC)
+  add_library(toxcore_static STATIC ${toxcore_SOURCES})
+  if(NOT MSVC)
+    set_target_properties(toxcore_static PROPERTIES OUTPUT_NAME toxcore)
+  endif()
   target_link_libraries(toxcore_static PRIVATE ${toxcore_LINK_LIBRARIES})
   target_link_directories(toxcore_static PUBLIC ${toxcore_LINK_DIRECTORIES})
   target_include_directories(toxcore_static SYSTEM PRIVATE ${toxcore_INCLUDE_DIRECTORIES})
   target_compile_options(toxcore_static PRIVATE ${toxcore_COMPILE_OPTIONS})
 endif()
-if(TARGET toxcore_shared)
-  target_link_libraries(toxcore_shared PRIVATE ${toxcore_LINK_LIBRARIES})
-  target_link_directories(toxcore_shared PUBLIC ${toxcore_LINK_DIRECTORIES})
-  target_include_directories(toxcore_shared SYSTEM PRIVATE ${toxcore_INCLUDE_DIRECTORIES})
-  target_compile_options(toxcore_shared PRIVATE ${toxcore_COMPILE_OPTIONS})
+
+if(BUILD_FUZZ_TESTS)
+  add_library(toxcore_fuzz STATIC ${toxcore_SOURCES})
+  target_link_libraries(toxcore_fuzz PRIVATE ${toxcore_LINK_LIBRARIES})
+  target_link_directories(toxcore_fuzz PUBLIC ${toxcore_LINK_DIRECTORIES})
+  target_include_directories(toxcore_fuzz SYSTEM PRIVATE ${toxcore_INCLUDE_DIRECTORIES})
+  target_compile_options(toxcore_fuzz PRIVATE ${toxcore_COMPILE_OPTIONS})
+  target_compile_definitions(toxcore_fuzz PUBLIC "FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION")
 endif()
 
 # Make version script (on systems that support it) to limit symbol visibility.
@@ -477,14 +506,27 @@ install_module(toxcore DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tox)
 #
 ################################################################################
 
+add_library(test_util STATIC
+  toxcore/DHT_test_util.cc
+  toxcore/DHT_test_util.hh
+  toxcore/crypto_core_test_util.cc
+  toxcore/crypto_core_test_util.hh
+  toxcore/mem_test_util.cc
+  toxcore/mem_test_util.hh
+  toxcore/network_test_util.cc
+  toxcore/network_test_util.hh
+  toxcore/test_util.cc
+  toxcore/test_util.hh)
+
 function(unit_test subdir target)
   add_executable(unit_${target}_test ${subdir}/${target}_test.cc)
+  target_link_libraries(unit_${target}_test PRIVATE test_util)
   if(TARGET toxcore_static)
     target_link_libraries(unit_${target}_test PRIVATE toxcore_static)
   else()
     target_link_libraries(unit_${target}_test PRIVATE toxcore_shared)
   endif()
-  target_link_libraries(unit_${target}_test PRIVATE GTest::GTest GTest::Main)
+  target_link_libraries(unit_${target}_test PRIVATE GTest::gtest GTest::gtest_main GTest::gmock)
   set_target_properties(unit_${target}_test PROPERTIES COMPILE_FLAGS "${TEST_CXX_FLAGS}")
   add_test(NAME ${target} COMMAND ${CROSSCOMPILING_EMULATOR} unit_${target}_test)
   set_property(TEST ${target} PROPERTY ENVIRONMENT "LLVM_PROFILE_FILE=${target}.profraw")
@@ -492,7 +534,7 @@ endfunction()
 
 # The actual unit tests follow.
 #
-if(GTEST_FOUND)
+if(TARGET GTest::gtest AND TARGET GTest::gmock)
   unit_test(toxav ring_buffer)
   unit_test(toxav rtp)
   unit_test(toxcore DHT)
@@ -504,6 +546,7 @@ if(GTEST_FOUND)
   unit_test(toxcore mem)
   unit_test(toxcore mono_time)
   unit_test(toxcore ping_array)
+  unit_test(toxcore test_util)
   unit_test(toxcore tox)
   unit_test(toxcore util)
 endif()

@@ -6,23 +6,20 @@
 #include <array>
 #include <vector>
 
+#include "crypto_core_test_util.hh"
 #include "util.h"
 
 namespace {
 
 using HmacKey = std::array<uint8_t, CRYPTO_HMAC_KEY_SIZE>;
 using Hmac = std::array<uint8_t, CRYPTO_HMAC_SIZE>;
-using PublicKey = std::array<uint8_t, CRYPTO_PUBLIC_KEY_SIZE>;
 using SecretKey = std::array<uint8_t, CRYPTO_SECRET_KEY_SIZE>;
-using ExtPublicKey = std::array<uint8_t, EXT_PUBLIC_KEY_SIZE>;
-using ExtSecretKey = std::array<uint8_t, EXT_SECRET_KEY_SIZE>;
 using Signature = std::array<uint8_t, CRYPTO_SIGNATURE_SIZE>;
 using Nonce = std::array<uint8_t, CRYPTO_NONCE_SIZE>;
 
 TEST(CryptoCore, EncryptLargeData)
 {
-    const Random *rng = system_random();
-    ASSERT_NE(rng, nullptr);
+    Test_Random rng;
 
     Nonce nonce{};
     PublicKey pk;
@@ -71,13 +68,12 @@ TEST(CryptoCore, IncrementNonceNumber)
 
 TEST(CryptoCore, Signatures)
 {
-    const Random *rng = system_random();
-    ASSERT_NE(rng, nullptr);
+    Test_Random rng;
 
-    ExtPublicKey pk;
-    ExtSecretKey sk;
+    Extended_Public_Key pk;
+    Extended_Secret_Key sk;
 
-    EXPECT_TRUE(create_extended_keypair(pk.data(), sk.data()));
+    EXPECT_TRUE(create_extended_keypair(&pk, &sk, rng));
 
     std::vector<uint8_t> message{0};
     message.clear();
@@ -86,9 +82,9 @@ TEST(CryptoCore, Signatures)
     for (uint8_t i = 0; i < 100; ++i) {
         Signature signature;
         EXPECT_TRUE(crypto_signature_create(
-            signature.data(), message.data(), message.size(), get_sig_sk(sk.data())));
+            signature.data(), message.data(), message.size(), get_sig_sk(&sk)));
         EXPECT_TRUE(crypto_signature_verify(
-            signature.data(), message.data(), message.size(), get_sig_pk(pk.data())));
+            signature.data(), message.data(), message.size(), get_sig_pk(&pk)));
 
         message.push_back(random_u08(rng));
     }
@@ -96,8 +92,7 @@ TEST(CryptoCore, Signatures)
 
 TEST(CryptoCore, Hmac)
 {
-    const Random *rng = system_random();
-    ASSERT_NE(rng, nullptr);
+    Test_Random rng;
 
     HmacKey sk;
     new_hmac_key(rng, sk.data());

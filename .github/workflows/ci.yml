@@ -15,16 +15,24 @@ jobs:
 
   analysis:
     strategy:
+      fail-fast: false
       matrix:
-        tool: [autotools, clang-tidy, compcert, cppcheck, doxygen, misra, tcc, tokstyle]
+        tool: [autotools, clang-tidy, compcert, cppcheck, doxygen, goblint, infer, misra, modules, rpm, slimcc, sparse, tcc, tokstyle]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+      - name: Build toxchat/c-toxcore:sources
+        uses: docker/build-push-action@v4
+        with:
+          file: other/docker/sources/sources.Dockerfile
+          tags: toxchat/c-toxcore:sources
       - name: Docker Build
         uses: docker/build-push-action@v4
         with:
-          file: other/docker/${{ matrix.tool }}/Dockerfile
+          file: other/docker/${{ matrix.tool }}/${{ matrix.tool }}.Dockerfile
 
   coverage-linux:
     runs-on: ubuntu-latest
@@ -34,6 +42,17 @@ jobs:
           submodules: recursive
       - name: Build, test, and upload coverage
         run: other/docker/coverage/run
+
+  generate-events:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Run generate_event_c
+        run: |
+          other/event_tooling/run
+          git diff --exit-code
 
   cimplefmt:
     runs-on: ubuntu-latest
@@ -85,7 +104,7 @@ jobs:
       - name: Configure CMake
         run: cmake --preset windows-default
       - name: Build
-        run: cmake --build _build
+        run: cmake --build _build -j $([int]$env:NUMBER_OF_PROCESSORS+2)
       - name: Test
         run: |
           cd _build
@@ -102,6 +121,41 @@ jobs:
           submodules: recursive
       - name: Cross compilation
         run: .github/scripts/cmake-win${{ matrix.bits }} script
+
+  build-netbsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Test in NetBSD
+        id: test
+        uses: vmactions/netbsd-vm@v1
+        with:
+          usesh: true
+          copyback: false
+          prepare:
+            /usr/sbin/pkg_add
+              cmake
+              googletest
+              libconfig
+              libopus
+              libsodium
+              libvpx
+              pkg-config
+
+          run: |
+            # TODO(iphydf): Investigate NetBSD failures on these tests.
+            sed -Ei -e '/(TCP|dht_getnodes_api)/s/^/#/' auto_tests/CMakeLists.txt
+            cmake . \
+              -DMIN_LOGGER_LEVEL=TRACE \
+              -DMUST_BUILD_TOXAV=ON \
+              -DNON_HERMETIC_TESTS=ON \
+              -DTEST_TIMEOUT_SECONDS=90 \
+              -DUSE_IPV6=OFF \
+              -DAUTOTEST=ON
+            cmake --build . --target install
+            ctest -j50 --output-on-failure --rerun-failed --repeat until-pass:6
 
   mypy:
     runs-on: ubuntu-latest
