@@ -98,7 +98,7 @@ uint16_t data_checksum(const uint8_t *data, uint32_t length);
 
 /**
  * @brief Generic function to print bytes as String; based on id_to_string() from Messenger.c
- * 
+ *
  * @param bytes Bytes to be printed as String.
  * @param bytes_length The length in bytes
  * @param str The string to save the result to.

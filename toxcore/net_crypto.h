@@ -137,13 +137,13 @@ typedef struct Noise_Handshake {
     //TODO: static_private?
     uint8_t static_private[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
-	uint8_t ephemeral_private[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t ephemeral_private[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
-	uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
-	uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
 
-	uint8_t hash[CRYPTO_SHA512_SIZE];
-	uint8_t chaining_key[CRYPTO_SHA512_SIZE];
+    uint8_t hash[CRYPTO_SHA512_SIZE];
+    uint8_t chaining_key[CRYPTO_SHA512_SIZE];
 
     bool initiator;
 } Noise_Handshake;
@@ -160,7 +160,7 @@ typedef struct New_Connection {
     Noise_Handshake *noise_handshake;
     //TODO: if no struct necessary
     // uint8_t noise_hash[CRYPTO_SHA512_SIZE];
-	// uint8_t noise_chaining_key[CRYPTO_SHA512_SIZE];
+    // uint8_t noise_chaining_key[CRYPTO_SHA512_SIZE];
     // uint8_t niose_send_key[CRYPTO_PUBLIC_KEY_SIZE];
     // uint8_t noise_recv_key[CRYPTO_PUBLIC_KEY_SIZE];
     // bool initiator;
