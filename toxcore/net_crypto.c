@@ -3315,7 +3315,7 @@ static int tcp_data_callback(void *object, int crypt_connection_id, const uint8_
     Net_Crypto *c = (Net_Crypto *)object;
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", data[0]);
+    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", packet[0]);
 
     if (length == 0 || length > MAX_CRYPTO_PACKET_SIZE) {
         return -1;
@@ -3352,7 +3352,7 @@ static int tcp_oob_callback(void *object, const uint8_t *public_key, unsigned in
     Net_Crypto *c = (Net_Crypto *)object;
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", data[0]);
+    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", packet[0]);
 
     if (length == 0 || length > MAX_CRYPTO_PACKET_SIZE) {
         return -1;
