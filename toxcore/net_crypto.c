@@ -497,8 +497,9 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
 #define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 /* Noise: Necessary for Noise-based handshake */
 #define NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-#define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
-#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH (CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH)
+#define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
+#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR (CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH)
+#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER (CRYPTO_NONCE_SIZE + COOKIE_LENGTH)
 
 /*
 * TODO: Helper function to print hashes, keys, packets, etc.
@@ -695,7 +696,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->static_private, noise_handshake->remote_static);
 
             /* Noise Handshake Payload */
-            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH];
+            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR];
             memcpy(handshake_payload_plain, nonce, CRYPTO_NONCE_SIZE);
             // Noise: Cookie authenticated via ciphertext MAC
             // crypto_sha512(handshake_payload_plain + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
@@ -748,10 +749,10 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             [24 bytes nonce for handshake payload encryption]
             [Encrypted message containing:
             [24 bytes base nonce] => WITH base Nonce, to be used for transport message encryption after handshake
-            [Cookie 112 bytes] => Cookie encrypted and authenticate via XAEAD
-            [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
+            [Cookie 112 bytes] => INITIATOR Cookie encrypted and authenticate via XAEAD
+            ~~[112 bytes Other Cookie (used by the other to respond to the handshake packet)]~~ NOT necessary for NoiseIK
             [MAC encrypted payload 16 bytes]
-            => 321 bytes in total
+            => ~~321~~ 209 bytes in total
             */
         else {
             /* set ephemeral private+public */
@@ -784,7 +785,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             // LOGGER_DEBUG(c->log, "RESPONDER es temp_key: %s", log_temp_key);
 
             /* Create Noise Handshake Payload */
-            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH];
+            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER];
             memcpy(handshake_payload_plain, nonce, CRYPTO_NONCE_SIZE);
             // Noise: Cookie authenticated via ciphertext MAC
             // crypto_sha512(handshake_payload_plain + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
@@ -792,15 +793,14 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             // Noise: Cookie from INITIATOR
             memcpy(handshake_payload_plain + CRYPTO_NONCE_SIZE, cookie, COOKIE_LENGTH);
 
-            uint8_t cookie_plain[COOKIE_DATA_LENGTH];
-            memcpy(cookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
-            memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
-
-            /* OtherCookie is added to payload */
-            if (create_cookie(c->rng, c->mono_time, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH,
-                              cookie_plain, c->secret_symmetric_key) != 0) {
-                return -1;
-            }
+            /* OtherCookie is added to payload => NOT necessary for RESPONDER HS Packet */
+            // uint8_t cookie_plain[COOKIE_DATA_LENGTH];
+            // memcpy(cookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
+            // memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
+            // if (create_cookie(c->rng, c->mono_time, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH,
+            //                   cookie_plain, c->secret_symmetric_key) != 0) {
+            //     return -1;
+            // }
 
             /* Add Handshake payload nonce
              Nonce provided as parameter is the base nonce! -> Add nonce for static pub key encryption to packet
@@ -950,7 +950,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             /* ss */
             noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->static_private, noise_handshake->remote_static);
             /* Payload decryption */
-            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH];
+            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR];
             /* get Handshake payload base nonce */
             memcpy(nonce, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE, CRYPTO_NONCE_SIZE);
 
@@ -998,9 +998,9 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             [Encrypted message containing:
             [24 bytes base nonce] => WITH base Nonce, to be used for transport message encryption after handshake
             [Cookie 112 bytes] => Cookie encrypted and authenticated via XAEAD
-            [112 bytes Other Cookie (used by the other to respond to the handshake packet)]
+            ~~[112 bytes Other Cookie (used by the other to respond to the handshake packet)]~~ NOT necessary for NoiseIK
             [MAC 16 bytes]
-            => 321 bytes in total
+            => ~~321~~ 209 bytes in total
             */
         else {
             LOGGER_DEBUG(c->log, "INITIATOR: Noise HS handle/ReadMessage");
@@ -1029,7 +1029,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             /* se */
             noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->static_private, noise_handshake->remote_ephemeral);
             /* Payload decryption */
-            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH];
+            uint8_t handshake_payload_plain[NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER];
             memcpy(nonce, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_NONCE_SIZE);
 
             //TODO: Remove
