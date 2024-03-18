@@ -135,9 +135,9 @@ non_null() DHT *nc_get_dht(const Net_Crypto *c);
  */
 typedef struct Noise_Handshake {
     //TODO: static_private?
-    uint8_t static_private[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t static_private[CRYPTO_SECRET_KEY_SIZE];
     uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
-    uint8_t ephemeral_private[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t ephemeral_private[CRYPTO_SECRET_KEY_SIZE];
     uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
@@ -161,8 +161,8 @@ typedef struct New_Connection {
     //TODO: if no struct necessary
     // uint8_t noise_hash[CRYPTO_SHA512_SIZE];
     // uint8_t noise_chaining_key[CRYPTO_SHA512_SIZE];
-    // uint8_t niose_send_key[CRYPTO_PUBLIC_KEY_SIZE];
-    // uint8_t noise_recv_key[CRYPTO_PUBLIC_KEY_SIZE];
+    // uint8_t niose_send_key[CRYPTO_SHARED_KEY_SIZE];
+    // uint8_t noise_recv_key[CRYPTO_SHARED_KEY_SIZE];
     // bool initiator;
 
     uint8_t *cookie;

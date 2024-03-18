@@ -651,7 +651,7 @@ void crypto_hkdf(uint8_t *output1, uint8_t *output2, const uint8_t *data,
  */
 int32_t noise_mix_key(uint8_t chaining_key[CRYPTO_SHA512_SIZE],
                       uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                      const uint8_t private_key[CRYPTO_PUBLIC_KEY_SIZE],
+                      const uint8_t private_key[CRYPTO_SECRET_KEY_SIZE],
                       const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE])
 {
     uint8_t dh_calculation[CRYPTO_PUBLIC_KEY_SIZE];

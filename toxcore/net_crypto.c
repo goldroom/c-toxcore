@@ -560,7 +560,7 @@ static int noise_handshake_init
     /* Sets the initiator, s => ephemeral keys are set afterwards */
     noise_handshake->initiator = initiator;
     if (self_secret_key != nullptr) {
-        memcpy(noise_handshake->static_private, self_secret_key, CRYPTO_PUBLIC_KEY_SIZE);
+        memcpy(noise_handshake->static_private, self_secret_key, CRYPTO_SECRET_KEY_SIZE);
         crypto_derive_public_key(noise_handshake->static_public, self_secret_key);
 
         //TODO: remove
@@ -661,7 +661,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             */
         if (noise_handshake->initiator) {
             /* set ephemeral private+public */
-            memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_PUBLIC_KEY_SIZE);
+            memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_SECRET_KEY_SIZE);
             memcpy(noise_handshake->ephemeral_public, ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
 
             /* e */
@@ -756,7 +756,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             */
         else {
             /* set ephemeral private+public */
-            memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_PUBLIC_KEY_SIZE);
+            memcpy(noise_handshake->ephemeral_private, ephemeral_private, CRYPTO_SECRET_KEY_SIZE);
             memcpy(noise_handshake->ephemeral_public, ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
 
             /* e */
