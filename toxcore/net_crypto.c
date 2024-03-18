@@ -1637,7 +1637,6 @@ static int handle_request_packet(const Memory *mem, Mono_Time *mono_time, Packet
 /** @brief Creates and sends a data packet to the peer using the fastest route. Currently only supports Noise (XChaCha20-Poly1305)
  * transport encryption.
  *
- * TODO: adapt for backwards compatibility
  *
  * @retval -1 on failure.
  * @retval 0 on success.
@@ -1667,9 +1666,6 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
     VLA(uint8_t, packet, packet_size);
     packet[0] = NET_PACKET_CRYPTO_DATA;
     memcpy(packet + 1, conn->sent_nonce + (CRYPTO_NONCE_SIZE - sizeof(uint16_t)), sizeof(uint16_t));
-    //TODO: need information in crypto conn if this is a Noise connection!
-    //TODO: enable backwards compatiblity
-    // const int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
 
     //TODO: remove
     // char key[CRYPTO_SECRET_KEY_SIZE*2+1];
@@ -1679,8 +1675,15 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
     // bytes2string(nonce_print, sizeof(nonce_print), conn->sent_nonce, CRYPTO_NONCE_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
-    //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
-    const int len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
+    //TODO: len was const
+    int len;
+    if (conn->noise_handshake_enabled) { /* Case NoiseIK handshake */
+        //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
+        int len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
+    } else { /* Case non-Noise handshake */
+        int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+    }
+    
 
     if (len + 1 + sizeof(uint16_t) != packet_size) {
         LOGGER_ERROR(c->log, "encryption failed: %d", len);
@@ -1831,7 +1834,6 @@ static uint16_t get_nonce_uint16(const uint8_t *nonce)
  * Currently only supports Noise (XChaCha20-Poly1305)
  * transport decryption.
  *
- * TODO: adapt for backwards compatibility
  *
  * @retval -1 on failure.
  * @return length of data on success.
@@ -1859,10 +1861,6 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
     net_unpack_u16(packet + 1, &num);
     const uint16_t diff = num - num_cur_nonce;
     increment_nonce_number(nonce, diff);
-    //TODO: need information in crypto conn if this is a Noise connection!
-    //TODO: enable backwards compatiblity
-    // const int len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
-    //                                        length - (1 + sizeof(uint16_t)), data);
 
     //TODO: remove
     // char key[CRYPTO_SECRET_KEY_SIZE*2+1];
@@ -1872,9 +1870,18 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
     // bytes2string(nonce_print, sizeof(nonce_print), nonce, CRYPTO_NONCE_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
-    //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
-    const int len = decrypt_data_symmetric_xaead(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t), length - (1 + sizeof(uint16_t)), data,
+    //TODO: len was const
+    int len;
+    if (conn->noise_handshake_enabled) { /* case NoiseIK handshake */
+        //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
+        len = decrypt_data_symmetric_xaead(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t), length - (1 + sizeof(uint16_t)), data,
                     nullptr, 0);
+    } else { /* case non-Noise handshake */
+        len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
+                                           length - (1 + sizeof(uint16_t)), data);
+    }
+
+    
 
     //TODO: remove
     // LOGGER_DEBUG(c->log, "data packet decrypt len: %d", len);
@@ -2456,6 +2463,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
 
     if (length == HANDSHAKE_PACKET_LENGTH) {
         conn->noise_handshake_enabled = false;
+        //TODO: Wipe noise_handshake etc. in this case?
     }
 
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
@@ -2543,7 +2551,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
 
         LOGGER_DEBUG(c->log, "Crypto Conn Status: %d", conn->status);
 
-        if (conn->noise_handshake != nullptr) {
+        if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
             LOGGER_DEBUG(c->log, "NOISE HANDHSHAKE");
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
             if (conn->noise_handshake->initiator) {
@@ -2571,18 +2579,18 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
             }
         }
-        /* non-Noise handshake case */
+        /* Backwards compatibility: non-Noise handshake case */
         else {
             if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) {
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
                     return -1;
                 }
             }
-            //TODO: necessary for non-Noise handshake => change to OLD handshake condition
-            //encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
+            /* Backwards compatibility: necessary for non-Noise handshake */ 
+            encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
             //TODO: why here and not before? => set before, in case of dht_pk_callback there is a new crypto connection created anyway
-            //TODO: necessary for old handshake / backwards compatibility
-            //conn->status = CRYPTO_CONN_NOT_CONFIRMED;
+            /* Backwards compatibility: necessary for non-Noise handshake */ 
+            conn->status = CRYPTO_CONN_NOT_CONFIRMED;
         }
     } else {
         if (conn->dht_pk_callback != nullptr) {
@@ -2931,13 +2939,11 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     n_c.source = *source;
     n_c.cookie_length = COOKIE_LENGTH;
 
-    //TODO: adapt static allocation?
-    n_c.noise_handshake = &n_c.noise_handshake_data;
 
-    //TODO: Differention between non-Noise and Noise-based handshake needs to be checked here!
-    //TODO: e.g. based on length?
-
+    /* Backwards comptability: Differention between non-Noise and Noise-based handshake based on received HS packet length */ 
     if (length != HANDSHAKE_PACKET_LENGTH) {
+        //TODO: adapt static allocation?
+        n_c.noise_handshake = &n_c.noise_handshake_data;    
         if (noise_handshake_init(nullptr, n_c.noise_handshake, c->self_secret_key, nullptr, false) != 0) {
             crypto_memzero(n_c.noise_handshake, sizeof(Noise_Handshake));
             n_c.noise_handshake = nullptr;
@@ -2957,6 +2963,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             return -1;
         }
     } else { /* case non-Noise handshake */
+        // Necessary for backwards compatibility
+        n_c.noise_handshake = nullptr;
         if (!handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
                                      n_c.cookie, data, length, nullptr, nullptr)) {
             mem_delete(c->mem, n_c.cookie);
@@ -2974,8 +2982,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
     const int crypt_connection_id = getcryptconnection_id(c, n_c.public_key);
 
-    //TODO: Unsure which case this is.. if already called new_crypto_connection() as responder before?
-    //TODO: add compatibility to non-Noise handshake
+    //TODO: This is only called if new_crypto_connection() was already called in the meantime! Now RESPONDER!
+    //TODO: Does it make sense to handle this case for NoiseIK handshake?
     if (crypt_connection_id != -1) {
         LOGGER_DEBUG(c->log, "RESPONDER: CRYPTO CONN EXISTING");
         Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
@@ -2986,7 +2994,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
         if (!pk_equal(n_c.dht_public_key, conn->dht_public_key)) {
             connection_kill(c, crypt_connection_id, userdata);
-        } else {
+        } else  if(length != HANDSHAKE_PACKET_LENGTH) { /* case NoiseIK handshake */
+            conn->noise_handshake_enabled = true;
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
                 mem_delete(c->mem, n_c.cookie);
                 return -1;
@@ -3020,41 +3029,29 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
             mem_delete(c->mem, n_c.cookie);
             return 0;
+        } else { /* case non-Noise handshake */
+            conn->noise_handshake_enabled = false;
+            if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
+                mem_delete(c->mem, n_c.cookie);
+                return -1;
+            }
+
+            memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
+            memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
+            encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
+
+            crypto_connection_add_source(c, crypt_connection_id, source);
+
+            if (create_send_handshake(c, crypt_connection_id, n_c.cookie, n_c.dht_public_key) != 0) {
+                mem_delete(c->mem, n_c.cookie);
+                return -1;
+            }
+
+            conn->status = CRYPTO_CONN_NOT_CONFIRMED;
+            mem_delete(c->mem, n_c.cookie);
+            return 0;
         }
     }
-
-    //TODO: case non-Noise handshake
-    // if (crypt_connection_id != -1) {
-    //     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
-
-    //     if (conn == nullptr) {
-    //         return -1;
-    //     }
-
-    //     if (!pk_equal(n_c.dht_public_key, conn->dht_public_key)) {
-    //         connection_kill(c, crypt_connection_id, userdata);
-    //     } else {
-    //         if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
-    //             mem_delete(c->mem, n_c.cookie);
-    //             return -1;
-    //         }
-
-    //         memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
-    //         memcpy(conn->peersessionpublic_key, n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE);
-    //         encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
-
-    //         crypto_connection_add_source(c, crypt_connection_id, source);
-
-    //         if (create_send_handshake(c, crypt_connection_id, n_c.cookie, n_c.dht_public_key) != 0) {
-    //             mem_delete(c->mem, n_c.cookie);
-    //             return -1;
-    //         }
-
-    //         conn->status = CRYPTO_CONN_NOT_CONFIRMED;
-    //         mem_delete(c->mem, n_c.cookie);
-    //         return 0;
-    //     }
-    // }
 
     const int ret = c->new_connection_callback(c->new_connection_callback_object, &n_c);
     mem_delete(c->mem, n_c.cookie);
@@ -3108,7 +3105,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 
     conn->connection_number_tcp = connection_number_tcp;
 
-    //Noise: only happening for RESPONDER
+    // NoiseIK: only happening for RESPONDER
     if (n_c->noise_handshake != nullptr) {
         if (!n_c->noise_handshake->initiator) {
             //TODO: remove
@@ -3237,6 +3234,8 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->rtt_time = DEFAULT_PING_CONNECTION;
     memcpy(conn->dht_public_key, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
+    // Necessary for backwards compatibility to non-Noise handshake
+    conn->noise_handshake = nullptr;
     conn->noise_handshake_enabled = true;
 
     conn->cookie_request_number = random_u64(c->rng);
