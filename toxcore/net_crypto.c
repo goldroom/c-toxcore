@@ -1679,9 +1679,9 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
     int len = 0;
     if (conn->noise_handshake_enabled) { /* Case NoiseIK handshake */
         //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
-        int len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
+        len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
     } else { /* Case non-Noise handshake */
-        int len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+        len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
     }
     
 
