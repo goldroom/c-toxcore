@@ -2461,16 +2461,18 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     //TODO: via noise_handshake struct? TODO: remove
     // bool initiator_change = false;
 
-    if (length == HANDSHAKE_PACKET_LENGTH) {
-        conn->noise_handshake_enabled = false;
+    if (length != HANDSHAKE_PACKET_LENGTH) {
+        conn->noise_handshake_enabled = true;
         //TODO: Wipe noise_handshake etc. in this case?
+    } else {
+        conn->noise_handshake_enabled = false;
     }
 
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
-        LOGGER_DEBUG(c->log, "NOISE HANDHSHAKE");
+        LOGGER_DEBUG(c->log, "Noise handshake");
         if (conn->noise_handshake->initiator) {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
-                LOGGER_DEBUG(c->log, "INITIATOR: NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
+                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
                 //TODO: fails if peer receives two handshake packets.. check for send_key/recv_key?
                 if (!handle_crypto_handshake(c, conn->recv_nonce, nullptr, nullptr, dht_public_key, nullptr,
                                              packet, length, conn->public_key, conn->noise_handshake)) {
