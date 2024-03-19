@@ -3235,7 +3235,6 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     memcpy(conn->dht_public_key, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
     // Necessary for backwards compatibility to non-Noise handshake
-    conn->noise_handshake = nullptr;
     conn->noise_handshake_enabled = true;
 
     conn->cookie_request_number = random_u64(c->rng);
