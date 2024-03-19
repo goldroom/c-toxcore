@@ -2401,7 +2401,7 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
 
     if (conn->noise_handshake != nullptr) {
         if (conn->noise_handshake->initiator) {
-            LOGGER_DEBUG(c->log, "INITIATOR -> NOISE Handshake");
+            LOGGER_DEBUG(c->log, "INITIATOR -> Noise handshake");
             if (create_send_handshake(c, crypt_connection_id, cookie, conn->dht_public_key) != 0) {
                 return -1;
             }
@@ -2410,7 +2410,7 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
         }
     } else {
         /* non-Noise handshake */
-        LOGGER_DEBUG(c->log, "non-Noise Handshake");
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
         if (create_send_handshake(c, crypt_connection_id, cookie, conn->dht_public_key) != 0) {
             return -1;
         }
@@ -2477,7 +2477,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                     return -1;
                 }
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
-                LOGGER_DEBUG(c->log, "INITIATOR: CHANGED TO RESPONDER");
+                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGED TO RESPONDER");
                 if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, nullptr, false) != 0) {
                     return -1;
                 }
@@ -2510,7 +2510,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         /* Case where RESPONDER with and without change from INITIATOR */
         else {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
-                LOGGER_DEBUG(c->log, "RESPONDER: NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
+                LOGGER_DEBUG(c->log, "RESPONDER: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
                 /* necessary, otherwise broken after INITIATOR to RESPONDER change */
                 if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, nullptr, false) != 0) {
                     return false;
@@ -2538,7 +2538,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     }
     /* non-Noise handshake */
     else {
-        LOGGER_DEBUG(c->log, "handle_packet_crypto_hs() => non-Noise HANDHSHAKE");
+        LOGGER_DEBUG(c->log, "handle_packet_crypto_hs() => non-Noise handshake");
         // necessary only for non-Noise
         uint8_t peer_real_pk[CRYPTO_PUBLIC_KEY_SIZE];
         if (!handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
@@ -2552,7 +2552,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         LOGGER_DEBUG(c->log, "Crypto Conn Status: %d", conn->status);
 
         if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
-            LOGGER_DEBUG(c->log, "NOISE HANDHSHAKE");
+            LOGGER_DEBUG(c->log, "Noise handshake");
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
             if (conn->noise_handshake->initiator) {
                 //TODO: remove
@@ -2581,6 +2581,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         }
         /* Backwards compatibility: non-Noise handshake case */
         else {
+            LOGGER_DEBUG(c->log, "non-Noise handshake");
             if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) {
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
                     return -1;
@@ -2995,6 +2996,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         if (!pk_equal(n_c.dht_public_key, conn->dht_public_key)) {
             connection_kill(c, crypt_connection_id, userdata);
         } else  if(length != HANDSHAKE_PACKET_LENGTH) { /* case NoiseIK handshake */
+            LOGGER_DEBUG(c->log, "Noise handshake");
             conn->noise_handshake_enabled = true;
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
                 mem_delete(c->mem, n_c.cookie);
@@ -3030,6 +3032,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             mem_delete(c->mem, n_c.cookie);
             return 0;
         } else { /* case non-Noise handshake */
+            LOGGER_DEBUG(c->log, "non-Noise handshake");
             conn->noise_handshake_enabled = false;
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
                 mem_delete(c->mem, n_c.cookie);
@@ -3109,7 +3112,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
     if (n_c->noise_handshake != nullptr) {
         if (!n_c->noise_handshake->initiator) {
             //TODO: remove
-            LOGGER_DEBUG(c->log, "Responder: Noise WriteMessage");
+            LOGGER_DEBUG(c->log, "Responder: Noise handshake -> Noise WriteMessage");
             memcpy(conn->noise_handshake, n_c->noise_handshake, sizeof(Noise_Handshake));
 
             //NOT possible here, need content afterwards!
