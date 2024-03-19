@@ -1676,7 +1676,7 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
     //TODO: len was const
-    int len;
+    int len = 0;
     if (conn->noise_handshake_enabled) { /* Case NoiseIK handshake */
         //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
         int len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
@@ -1871,7 +1871,7 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
     //TODO: len was const
-    int len;
+    int len = 0;
     if (conn->noise_handshake_enabled) { /* case NoiseIK handshake */
         //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
         len = decrypt_data_symmetric_xaead(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t), length - (1 + sizeof(uint16_t)), data,
