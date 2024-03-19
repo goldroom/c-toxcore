@@ -643,7 +643,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
     LOGGER_DEBUG(c->log, "ENTERING: create_crypto_handshake()");
     /* Noise-based handshake */
     if (noise_handshake != nullptr) {
-        LOGGER_DEBUG(c->log, "NOISE HANDSHAKE");
+        LOGGER_DEBUG(c->log, "Noise Handshake");
         /* Noise INITIATOR: -> e, es, s, ss */
         /* Initiator: Handshake packet structure
             [uint8_t 26]
@@ -822,6 +822,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
     }
     /* non-Noise handshake */
     else {
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
         uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
         memcpy(plain, nonce, CRYPTO_NONCE_SIZE);
         memcpy(plain + CRYPTO_NONCE_SIZE, ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
@@ -2584,11 +2585,12 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         /* Backwards compatibility: non-Noise handshake case */
         else {
             LOGGER_DEBUG(c->log, "non-Noise handshake");
-            if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) {
+            //TODO: doesn't work if Noise handshake packet was sent before
+            // if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) {
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
                     return -1;
                 }
-            }
+            // }
             /* Backwards compatibility: necessary for non-Noise handshake */ 
             encrypt_precompute(conn->peersessionpublic_key, conn->sessionsecret_key, conn->shared_key);
             //TODO: why here and not before? => set before, in case of dht_pk_callback there is a new crypto connection created anyway
@@ -3145,6 +3147,8 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 
             //TODO: remove
             LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
+            //TODO: here correct?
+            crypto_memzero(n_c->noise_handshake, sizeof(Noise_Handshake));
         } else {
             pthread_mutex_lock(&c->tcp_mutex);
             kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
@@ -3182,8 +3186,8 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
     conn->rtt_time = DEFAULT_PING_CONNECTION;
     crypto_connection_add_source(c, crypt_connection_id, &n_c->source);
 
-    //TODO: here correct?
-    crypto_memzero(n_c->noise_handshake, sizeof(Noise_Handshake));
+    //TODO: here correct? => nope, crashes backwards compatbility
+    // crypto_memzero(n_c->noise_handshake, sizeof(Noise_Handshake));
 
     return crypt_connection_id;
 }
