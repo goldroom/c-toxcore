@@ -1076,7 +1076,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
     }
     /* non-Noise handshake */
     else {
-        LOGGER_DEBUG(c->log, "ENTERING: handle_crypto_handshake() => OLD HANDSHAKE");
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
 
         if (length != HANDSHAKE_PACKET_LENGTH) {
             return false;
@@ -2095,6 +2095,7 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
 
     /* Noise-based handshake */
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
+        LOGGER_DEBUG(c->log, "NoiseIK handshake");
         if (conn->noise_handshake->initiator) {
             uint8_t handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR];
 
@@ -2123,6 +2124,7 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
     }
     /* non-Noise handshake*/
     else {
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
         uint8_t handshake_packet[HANDSHAKE_PACKET_LENGTH];
 
         /* ephemeral_private and noise_handshake not necessary for old handshake */
@@ -2541,7 +2543,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     }
     /* non-Noise handshake */
     else {
-        LOGGER_DEBUG(c->log, "handle_packet_crypto_hs() => non-Noise handshake");
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
         // necessary only for non-Noise
         uint8_t peer_real_pk[CRYPTO_PUBLIC_KEY_SIZE];
         if (!handle_crypto_handshake(c, conn->recv_nonce, conn->peersessionpublic_key, peer_real_pk, dht_public_key, cookie,
@@ -2968,6 +2970,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             return -1;
         }
     } else { /* case non-Noise handshake */
+        LOGGER_DEBUG(c->log, "non-Noise handshake");
         // Necessary for backwards compatibility
         n_c.noise_handshake = nullptr;
         if (!handle_crypto_handshake(c, n_c.recv_nonce, n_c.peersessionpublic_key, n_c.public_key, n_c.dht_public_key,
@@ -3115,6 +3118,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
     // NoiseIK: only happening for RESPONDER
     if (n_c->noise_handshake != nullptr) {
         if (!n_c->noise_handshake->initiator) {
+            conn->noise_handshake_enabled = true;
             //TODO: remove
             LOGGER_DEBUG(c->log, "Responder: Noise handshake -> Noise WriteMessage");
             memcpy(conn->noise_handshake, n_c->noise_handshake, sizeof(Noise_Handshake));
