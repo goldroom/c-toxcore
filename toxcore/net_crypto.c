@@ -2566,7 +2566,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 // LOGGER_DEBUG(c->log, "ck: %s", ck_print);
 
                 /* INITIATOR Noise Split(), nonces already set in crypto connection */
-                crypto_hkdf(conn->send_key, conn->recv_key, nullptr, CRYPTO_SYMMETRIC_KEY_SIZE, CRYPTO_SYMMETRIC_KEY_SIZE, 0, conn->noise_handshake->chaining_key);
+                crypto_hkdf(conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
                 LOGGER_DEBUG(c->log, "INITIATOR: After Noise Split()");
 
                 //TODO: remove
@@ -2579,7 +2579,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             /* Noise RESPONDER */
             else {
                 /* RESPONDER Noise Split(): vice-verse keys in comparison to initiator */
-                crypto_hkdf(conn->recv_key, conn->send_key, nullptr, CRYPTO_SYMMETRIC_KEY_SIZE, CRYPTO_SYMMETRIC_KEY_SIZE, 0, conn->noise_handshake->chaining_key);
+                crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
                 //TODO: remove
                 LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
             }
@@ -3015,7 +3015,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
             /* RESPONDER Noise Split(): vice-verse keys in comparison to initiator */
             //TODO: remove here?
-            crypto_hkdf(conn->recv_key, conn->send_key, nullptr, CRYPTO_SYMMETRIC_KEY_SIZE, CRYPTO_SYMMETRIC_KEY_SIZE, 0, conn->noise_handshake->chaining_key);
+            crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
             //TODO: remove
             LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
 
@@ -3133,7 +3133,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
             }
 
             /* Noise Split(), base nonces already set */
-            crypto_hkdf(conn->recv_key, conn->send_key, nullptr, CRYPTO_SYMMETRIC_KEY_SIZE, CRYPTO_SYMMETRIC_KEY_SIZE, 0, conn->noise_handshake->chaining_key);
+            crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
 
             //TODO: remove
             LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");

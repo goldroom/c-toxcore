@@ -581,8 +581,8 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
  * @param data_len length of either zero bytes, 32 bytes, or DHLEN bytes
  * @param chaining_key Noise 64 byte chaining key as HKDF salt
  */
-void crypto_hkdf(uint8_t *output1, uint8_t *output2, const uint8_t *data,
-                 size_t first_len, size_t second_len,
+void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
+                 size_t second_len, const uint8_t *data,
                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE]);
 
 /**
