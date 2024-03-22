@@ -712,7 +712,8 @@ static int tox_load(Tox *tox, const uint8_t *data, uint32_t length)
                       length - cookie_len, STATE_COOKIE_TYPE);
 }
 
-Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
+nullable(1, 2, 3)
+static Tox *tox_new_system(const struct Tox_Options *options, Tox_Err_New *error, const Tox_System *sys)
 {
     struct Tox_Options *default_options = nullptr;
 
@@ -736,7 +737,6 @@ Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
     const struct Tox_Options *const opts = options != nullptr ? options : default_options;
     assert(opts != nullptr);
 
-    const Tox_System *sys = tox_options_get_operating_system(opts);
     const Tox_System default_system = tox_default_system();
 
     if (sys == nullptr) {
@@ -1019,6 +1019,37 @@ Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
 
     tox_options_free(default_options);
     return tox;
+}
+
+Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
+{
+    return tox_new_system(options, error, nullptr);
+}
+
+Tox *tox_new_testing(const Tox_Options *options, Tox_Err_New *error, const Tox_Options_Testing *testing, Tox_Err_New_Testing *testing_error)
+{
+    if (testing == nullptr) {
+        SET_ERROR_PARAMETER(error, TOX_ERR_NEW_NULL);
+        SET_ERROR_PARAMETER(testing_error, TOX_ERR_NEW_TESTING_NULL);
+        return nullptr;
+    }
+
+    if (testing->operating_system == nullptr) {
+        SET_ERROR_PARAMETER(error, TOX_ERR_NEW_NULL);
+        SET_ERROR_PARAMETER(testing_error, TOX_ERR_NEW_TESTING_NULL);
+        return nullptr;
+    }
+
+    const Tox_System *sys = testing->operating_system;
+
+    if (sys->rng == nullptr || sys->ns == nullptr || sys->mem == nullptr) {
+        SET_ERROR_PARAMETER(error, TOX_ERR_NEW_NULL);
+        SET_ERROR_PARAMETER(testing_error, TOX_ERR_NEW_TESTING_NULL);
+        return nullptr;
+    }
+
+    SET_ERROR_PARAMETER(testing_error, TOX_ERR_NEW_TESTING_OK);
+    return tox_new_system(options, error, sys);
 }
 
 void tox_kill(Tox *tox)
@@ -3933,7 +3964,7 @@ bool tox_group_get_password(const Tox *tox, uint32_t group_number, uint8_t *pass
 }
 
 Tox_Group_Message_Id tox_group_send_message(
-    const Tox *tox, uint32_t group_number, Tox_Message_Type type, const uint8_t *message,
+    const Tox *tox, uint32_t group_number, Tox_Message_Type message_type, const uint8_t *message,
     size_t length, Tox_Err_Group_Send_Message *error)
 {
     assert(tox != nullptr);
@@ -3954,7 +3985,7 @@ Tox_Group_Message_Id tox_group_send_message(
     }
 
     uint32_t message_id = 0;
-    const int ret = gc_send_message(chat, message, length, type, &message_id);
+    const int ret = gc_send_message(chat, message, length, message_type, &message_id);
     tox_unlock(tox);
 
     switch (ret) {
@@ -3996,7 +4027,7 @@ Tox_Group_Message_Id tox_group_send_message(
 }
 
 Tox_Group_Message_Id tox_group_send_private_message(const Tox *tox, uint32_t group_number, uint32_t peer_id,
-        Tox_Message_Type type, const uint8_t *message, size_t length, Tox_Err_Group_Send_Private_Message *error)
+        Tox_Message_Type message_type, const uint8_t *message, size_t length, Tox_Err_Group_Send_Private_Message *error)
 {
     assert(tox != nullptr);
 
@@ -4016,7 +4047,7 @@ Tox_Group_Message_Id tox_group_send_private_message(const Tox *tox, uint32_t gro
     }
 
     uint32_t message_id = 0;
-    const int ret = gc_send_private_message(chat, gc_peer_id_from_int(peer_id), type, message, length, &message_id);
+    const int ret = gc_send_private_message(chat, gc_peer_id_from_int(peer_id), message_type, message, length, &message_id);
     tox_unlock(tox);
 
     switch (ret) {
@@ -4270,7 +4301,7 @@ uint32_t tox_group_invite_accept(Tox *tox, uint32_t friend_number, const uint8_t
         }
 
         case -6: {
-            SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_INVITE_ACCEPT_CORE);
+            SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_INVITE_ACCEPT_FRIEND_NOT_FOUND);
             return UINT32_MAX;
         }
 
