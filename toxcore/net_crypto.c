@@ -2751,6 +2751,15 @@ static int create_crypto_connection(Net_Crypto *c)
             return -1;
         }
 
+        c->crypto_connections[id].noise_handshake = (Noise_Handshake *) mem_alloc(c->mem, sizeof(Noise_Handshake));
+
+        if (c->crypto_connections[id].noise_handshake == nullptr) {
+            LOGGER_ERROR(c->log, "failed to alloc noise_handshake");
+            mem_delete(c->mem, c->crypto_connections[id].mutex);
+            pthread_mutex_unlock(&c->connections_mutex);
+            return  -1;
+        }
+
         // Memsetting float/double to 0 is non-portable, so we explicitly set them to 0
         c->crypto_connections[id].packet_recv_rate = 0.0;
         c->crypto_connections[id].packet_send_rate = 0.0;
@@ -2761,32 +2770,9 @@ static int create_crypto_connection(Net_Crypto *c)
         c->crypto_connections[id].status = CRYPTO_CONN_NO_CONNECTION;
     }
 
-    if (c->crypto_connections[id].mutex == nullptr) {
-        LOGGER_ERROR(c->log, "failed to alloc mutex");
-        pthread_mutex_unlock(&c->connections_mutex);
-        return -1;
-    }
-
-    if (pthread_mutex_init(c->crypto_connections[id].mutex, nullptr) != 0) {
-        mem_delete(c->mem, c->crypto_connections[id].mutex);
-        pthread_mutex_unlock(&c->connections_mutex);
-        return -1;
-    }
-
-    c->crypto_connections[id].noise_handshake = (Noise_Handshake *) mem_alloc(c->mem, sizeof(Noise_Handshake));
-
-    if (c->crypto_connections[id].noise_handshake == nullptr) {
-        LOGGER_ERROR(c->log, "failed to alloc noise_handshake");
-        mem_delete(c->mem, c->crypto_connections[id].mutex);
-        pthread_mutex_unlock(&c->connections_mutex);
-        return  -1;
-    }
-
     //TODO: Remove
     // c->crypto_connections[id].handshake_send_interval = CRYPTO_SEND_PACKET_INTERVAL + (rand() % 800);
     // LOGGER_DEBUG(c->log, "handshake_send_interval: %d", c->crypto_connections[id].handshake_send_interval);
-
-    c->crypto_connections[id].status = CRYPTO_CONN_NO_CONNECTION;
 
     pthread_mutex_unlock(&c->connections_mutex);
     return id;
