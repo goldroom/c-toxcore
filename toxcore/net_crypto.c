@@ -3196,7 +3196,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
     return crypt_connection_id;
 }
 
-/** @brief Create a crypto connection. Currently independent of non-Noise/Noise handshake.
+/** @brief Create a crypto connection. Currently supports both non-Noise and NoiseIK handshake.
  * If one to that real public key already exists, return it.
  *
  * return -1 on failure.

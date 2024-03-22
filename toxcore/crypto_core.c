@@ -531,7 +531,7 @@ void random_bytes(const Random *rng, uint8_t *bytes, size_t length)
 
 /* Necessary functions for Noise, cf. https://noiseprotocol.org/noise.html (Revision 34) */
 
-size_t encrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *nonce,
+size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -552,7 +552,7 @@ size_t encrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *no
     return encrypted_length;
 }
 
-size_t decrypt_data_symmetric_xaead(const uint8_t *shared_key, const uint8_t *nonce,
+size_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                     const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -657,7 +657,7 @@ int32_t noise_mix_key(uint8_t chaining_key[CRYPTO_SHA512_SIZE],
     uint8_t dh_calculation[CRYPTO_PUBLIC_KEY_SIZE];
     memset(dh_calculation, 0, CRYPTO_PUBLIC_KEY_SIZE);
 
-    // X25519 - returns plain DH result, afterwards hashed with HKDF
+    // X25519: returns plain DH result, afterwards hashed with HKDF
     if (crypto_scalarmult_curve25519(dh_calculation, private_key, public_key) != 0) {
         return -1;
     }
