@@ -129,12 +129,12 @@ non_null() const uint8_t *nc_get_self_secret_key(const Net_Crypto *c);
 non_null() TCP_Connections *nc_get_tcp_c(const Net_Crypto *c);
 non_null() DHT *nc_get_dht(const Net_Crypto *c);
 
-//TODO: struct necessary?
-//TODO: move to crypto_core.h?
+// TODO: struct necessary?
+// TODO: move to crypto_core.h?
 /** @brief Necessary Noise handshake state information/values.
  */
 typedef struct Noise_Handshake {
-    //TODO: static_private?
+    // TODO: static_private?
     uint8_t static_private[CRYPTO_SECRET_KEY_SIZE];
     uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t ephemeral_private[CRYPTO_SECRET_KEY_SIZE];

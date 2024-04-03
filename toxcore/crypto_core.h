@@ -547,6 +547,7 @@ size_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
  * @param auth Resulting authenticator.
  * @param key Secret key
  */
+non_null(1, 2) nullable(3)
 void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_SHA512_SIZE], const uint8_t *data,
                     size_t data_length);
 
@@ -581,6 +582,7 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
  * @param data_len length of either zero bytes, 32 bytes, or DHLEN bytes
  * @param chaining_key Noise 64 byte chaining key as HKDF salt
  */
+ non_null(1, 3, 7) nullable(5)
 void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
                  size_t second_len, const uint8_t *data,
                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE]);
@@ -600,6 +602,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  * @param private_key X25519 private key
  * @param public_key X25519 public key
  */
+ non_null()
 int32_t noise_mix_key(uint8_t chaining_key[CRYPTO_SHA512_SIZE], uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
                       const uint8_t private_key[CRYPTO_SECRET_KEY_SIZE],
                       const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]);
