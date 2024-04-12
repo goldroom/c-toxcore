@@ -493,6 +493,16 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
     return COOKIE_LENGTH;
 }
 
+/*
+* TODO: Helper function to print hashes, keys, packets, etc.
+* TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
+* bytes_to_string() from util.h
+*/
+static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length, const Logger *log)
+{
+    bytes_to_string(bytes, bytes_length, string, string_length);
+}
+
 /* Non-noise: Necessary for backwards compatiblity to non-Noise handshake */
 #define HANDSHAKE_PACKET_LENGTH (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 /* Noise: Necessary for Noise-based handshake */
@@ -504,122 +514,6 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
 #define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 #define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR (CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH)
 #define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER (CRYPTO_NONCE_SIZE + COOKIE_LENGTH)
-
-/*
-* TODO: Helper function to print hashes, keys, packets, etc.
-* TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
-* bytes_to_string() from util.h
-*/
-static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length, const Logger *log)
-{
-    bytes_to_string(bytes, bytes_length, string, string_length);
-}
-
-/**
- * @brief Initializes a Noise Handshake State with provided static X25519 ID key pair, X25519 static ID public key from peer
- * and sets if initiator or not.
- *
- * cf. Noise section 5.3
- * Calls InitializeSymmetric(protocol_name).
- * Calls MixHash(prologue).
- * Sets the initiator, s, e, rs, and re variables to the corresponding arguments.
- * Calls MixHash() once for each public key listed in the pre-messages.
- *
- * //TODO: remove Logger Param
- * @param log Tox logger
- * @param noise_handshake handshake struct to save the necessary values to
- * @param self_secret_key static private ID X25519 key of this Tox instance
- * @param peer_public_key X25519 static ID public key from peer to connect to
- * @param initiator specifies if this Tox instance is the initiator of this crypto connection
- *
- * @return -1 on failure
- * @return 0 on success
- */
-static int noise_handshake_init
-(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator)
-{
-    //TODO: remove
-    if (log != nullptr) {
-        LOGGER_DEBUG(log, "ENTERING");
-    }
-
-    //TODO: move to handle_packet_crypto_hs()?
-    crypto_memzero(noise_handshake, sizeof(Noise_Handshake));
-
-    /* IntializeSymmetric(protocol_name) => set h to NOISE_PROTOCOL_NAME and append zero bytes to make 64 bytes, sets ck = h
-     Nothing gets hashed in Tox case because NOISE_PROTOCOL_NAME < CRYPTO_SHA512_SIZE */
-    uint8_t temp_hash[CRYPTO_SHA512_SIZE];
-    memset(temp_hash, '\0', CRYPTO_SHA512_SIZE);
-    memcpy(temp_hash, NOISE_PROTOCOL_NAME, sizeof(NOISE_PROTOCOL_NAME));
-    memcpy(noise_handshake->hash, temp_hash, CRYPTO_SHA512_SIZE);
-    memcpy(noise_handshake->chaining_key, temp_hash, CRYPTO_SHA512_SIZE);
-
-    //TODO: remove
-    // char log_ck[CRYPTO_SHA512_SIZE*2+1];
-    // if (log != nullptr) {
-    //     bytes2string(log_ck, sizeof(log_ck), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE, log);
-    //     LOGGER_DEBUG(log, "ck: %s", log_ck);
-    // }
-
-    /* Sets the initiator, s => ephemeral keys are set afterwards */
-    noise_handshake->initiator = initiator;
-    if (self_secret_key != nullptr) {
-        memcpy(noise_handshake->static_private, self_secret_key, CRYPTO_SECRET_KEY_SIZE);
-        crypto_derive_public_key(noise_handshake->static_public, self_secret_key);
-
-        //TODO: remove
-        if (log != nullptr) {
-            char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-            bytes2string(log_spub, sizeof(log_spub), noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, log);
-            LOGGER_DEBUG(log, "static pub: %s", log_spub);
-        }
-
-    } else {
-        // fprintf(stderr, "Local static private key required, but not provided.\n");
-        LOGGER_DEBUG(log, "Local static private key required, but not provided.");
-        return -1;
-    }
-    /* <- s: pre-message from responder to initiator => sets rs (only initiator) */
-    if (initiator) {
-        if (peer_public_key != nullptr) {
-            memcpy(noise_handshake->remote_static, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-
-            //TODO: Remove
-            if (log != nullptr) {
-                char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-                bytes2string(log_spub, sizeof(log_spub), noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE, log);
-                LOGGER_DEBUG(log, "INITIATOR remote static: %s", log_spub);
-            }
-
-            /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
-            noise_mix_hash(noise_handshake->hash, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-
-            //TODO: remove
-            // if (log != nullptr) {
-            //     bytes2string(log_hash, sizeof(log_hash), noise_handshake->hash, CRYPTO_SHA512_SIZE, log);
-            //     LOGGER_DEBUG(log, "INITIATOR hash: %s", log_hash);
-            // }
-        } else {
-            // fprintf(stderr, "Remote peer static public key required, but not provided.\n");
-            LOGGER_DEBUG(log, "Remote peer static public key required, but not provided.");
-            return -1;
-        }
-    }
-    /* Noise RESPONDER */
-    else {
-        /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
-        noise_mix_hash(noise_handshake->hash, noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE);
-
-        //TODO: remove
-        // if (log != nullptr) {
-        //     bytes2string(log_hash, sizeof(log_hash), noise_handshake->hash, CRYPTO_SHA512_SIZE, log);
-        //     LOGGER_DEBUG(log, "RESPONDER hash: %s", log_hash);
-        // }
-    }
-
-    /* Ready to go */
-    return 0;
-}
 
 /**  @brief Create a handshake packet and put it in packet. Currently supports noise-Noise and Noise handshake.
  *

@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "attributes.h"
+#include "logger.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,6 +114,25 @@ typedef struct Random {
     const Random_Funcs *funcs;
     void *obj;
 } Random;
+
+// TODO: struct necessary?
+// TODO: move to crypto_core.h?
+/** @brief Necessary Noise handshake state information/values.
+ */
+typedef struct Noise_Handshake {
+    // TODO: static_private?
+    uint8_t static_private[CRYPTO_SECRET_KEY_SIZE];
+    uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t ephemeral_private[CRYPTO_SECRET_KEY_SIZE];
+    uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
+
+    uint8_t hash[CRYPTO_SHA512_SIZE];
+    uint8_t chaining_key[CRYPTO_SHA512_SIZE];
+
+    bool initiator;
+} Noise_Handshake;
 
 /** @brief System random number generator.
  *
@@ -620,6 +640,30 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
 void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
                  size_t second_len, const uint8_t *data,
                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE]);
+
+/**
+ * @brief Initializes a Noise Handshake State with provided static X25519 ID key pair, X25519 static ID public key from peer
+ * and sets if initiator or not.
+ *
+ * cf. Noise section 5.3
+ * Calls InitializeSymmetric(protocol_name).
+ * Calls MixHash(prologue).
+ * Sets the initiator, s, e, rs, and re variables to the corresponding arguments.
+ * Calls MixHash() once for each public key listed in the pre-messages.
+ *
+ * //TODO: remove Logger Param
+ * @param log Tox logger
+ * @param noise_handshake handshake struct to save the necessary values to
+ * @param self_secret_key static private ID X25519 key of this Tox instance
+ * @param peer_public_key X25519 static ID public key from peer to connect to
+ * @param initiator specifies if this Tox instance is the initiator of this crypto connection
+ *
+ * @return -1 on failure
+ * @return 0 on success
+ */
+ //TODO: non_null
+int noise_handshake_init
+(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator);
 
 /**
  * @brief Noise MixKey(input_key_material)

@@ -120,33 +120,12 @@ typedef enum Packet_Id {
 #define DEFAULT_PING_CONNECTION 1000
 #define DEFAULT_TCP_PING_CONNECTION 500
 
-#define NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
-
 typedef struct Net_Crypto Net_Crypto;
 
 non_null() const uint8_t *nc_get_self_public_key(const Net_Crypto *c);
 non_null() const uint8_t *nc_get_self_secret_key(const Net_Crypto *c);
 non_null() TCP_Connections *nc_get_tcp_c(const Net_Crypto *c);
 non_null() DHT *nc_get_dht(const Net_Crypto *c);
-
-// TODO: struct necessary?
-// TODO: move to crypto_core.h?
-/** @brief Necessary Noise handshake state information/values.
- */
-typedef struct Noise_Handshake {
-    // TODO: static_private?
-    uint8_t static_private[CRYPTO_SECRET_KEY_SIZE];
-    uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
-    uint8_t ephemeral_private[CRYPTO_SECRET_KEY_SIZE];
-    uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
-    uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
-    uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
-
-    uint8_t hash[CRYPTO_SHA512_SIZE];
-    uint8_t chaining_key[CRYPTO_SHA512_SIZE];
-
-    bool initiator;
-} Noise_Handshake;
 
 typedef struct New_Connection {
     IP_Port source;
