@@ -669,7 +669,6 @@ void noise_mix_hash(uint8_t hash[CRYPTO_SHA512_SIZE], const uint8_t *data, size_
  * @param plain_length length of plaintext
  * @param shared_key used for XAEAD encryption
  * @param hash stores hash value, used as associated data in XAEAD
- * @param nonce used for XEAD encryption
  */
 non_null()
 void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
@@ -691,7 +690,6 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
  * @param encrypted_length length of ciphertext+MAC
  * @param shared_key used for XAEAD decryption
  * @param hash stores hash value, used as associated data in XAEAD
- * @param nonce used for XEAD decryption
  */
 non_null()
 int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext, 
