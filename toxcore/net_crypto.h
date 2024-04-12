@@ -120,7 +120,7 @@ typedef enum Packet_Id {
 #define DEFAULT_PING_CONNECTION 1000
 #define DEFAULT_TCP_PING_CONNECTION 500
 
-#define NOISE_PROTOCOL_NAME "Noise_IK_25519_XChaChaPoly_SHA512"
+#define NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
 
 typedef struct Net_Crypto Net_Crypto;
 

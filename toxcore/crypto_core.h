@@ -509,10 +509,10 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
 /* Necessary functions for Noise, cf. https://noiseprotocol.org/noise.html (Revision 34) */
 
 /**
- * @brief Encrypt message with precomputed shared key using ChaCha20-Poly1305.
+ * @brief Encrypt message with precomputed shared key using ChaCha20-Poly1305-IETF (RFC7539).
  *
  * Encrypts plain of plain_length to encrypted of plain_length + @ref CRYPTO_MAC_SIZE
- * using a shared key @ref CRYPTO_SYMMETRIC_KEY_SIZE big and a @ref CRYPTO_NONCE_SIZE
+ * using a shared key @ref CRYPTO_SYMMETRIC_KEY_SIZE big and a @ref CRYPTO_NOISEIK_NONCE_SIZE
  * byte nonce. The encrypted message, as well as a tag authenticating both the confidential
  * message m and adlen bytes of non-confidential data ad, are put into encrypted.
  *
@@ -524,11 +524,11 @@ size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SI
                                     uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
 
 /**
- * @brief Decrypt message with precomputed shared key using ChaCha20-Poly1305.
+ * @brief Decrypt message with precomputed shared key using ChaCha20-Poly1305-IETF (RFC7539).
  *
  * Decrypts encrypted of encrypted_length to plain of length
  * `length - CRYPTO_MAC_SIZE` using a shared key @ref CRYPTO_SHARED_KEY_SIZE
- * big and a @ref CRYPTO_NONCE_SIZE byte nonce.
+ * big and a @ref CRYPTO_NOISEIK_NONCE_SIZE byte nonce.
  *
  * @retval -1 if there was a problem (decryption failed).
  * @return length of plain data if everything was fine.
