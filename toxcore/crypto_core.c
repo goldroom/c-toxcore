@@ -531,6 +531,49 @@ void random_bytes(const Random *rng, uint8_t *bytes, size_t length)
 
 /* Necessary functions for Noise, cf. https://noiseprotocol.org/noise.html (Revision 34) */
 
+size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
+                                    const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
+                                    const uint8_t *ad, size_t ad_length)
+{
+    // Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium
+    if (plain_length == 0 || shared_key == nullptr || nonce == nullptr || plain == nullptr || encrypted == nullptr) {
+        return -1;
+    }
+
+    unsigned long long encrypted_length = 0;
+
+    // nsec is not used by this particular construction and should always be NULL.
+    if (crypto_aead_chacha20poly1305_ietf_encrypt(encrypted, &encrypted_length, plain, plain_length,
+            ad, ad_length, nullptr, nonce, shared_key) != 0) {
+        return -1;
+    }
+
+    // assert(length < INT32_MAX - crypto_box_MACBYTES);
+    return encrypted_length;
+}
+
+size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
+                                    const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
+                                    const uint8_t *ad, size_t ad_length)
+{
+    // Additional data ad can be a NULL pointer with ad_length equal to 0;  plain_length is calculated by libsodium
+    if (encrypted_length <= CRYPTO_MAC_SIZE || shared_key == nullptr || nonce == nullptr || encrypted == nullptr
+            || plain == nullptr) {
+        return -1;
+    }
+
+    unsigned long long plain_length = 0;
+
+    if (crypto_aead_chacha20poly1305_ietf_decrypt(plain, &plain_length, nullptr, encrypted,
+            encrypted_length, ad, ad_length, nonce, shared_key) != 0) {
+        return -1;
+    }
+
+    // assert(length > crypto_box_MACBYTES);
+    // assert(length < INT32_MAX);
+    return plain_length;
+}
+
 size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
@@ -690,9 +733,11 @@ void noise_mix_hash(uint8_t hash[CRYPTO_SHA512_SIZE], const uint8_t *data, size_
  */
 void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
                             size_t plain_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                            uint8_t hash[CRYPTO_SHA512_SIZE], uint8_t nonce[CRYPTO_NONCE_SIZE])
+                            uint8_t hash[CRYPTO_SHA512_SIZE])
 {
-    unsigned long long encrypted_length = encrypt_data_symmetric_xaead(shared_key, nonce,
+    static const uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
+
+    unsigned long long encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           plaintext, plain_length, ciphertext,
                                           hash, CRYPTO_SHA512_SIZE);
 
@@ -706,9 +751,11 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
  */
 int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
                            size_t encrypted_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                           uint8_t hash[CRYPTO_SHA512_SIZE], uint8_t nonce[CRYPTO_NONCE_SIZE])
+                           uint8_t hash[CRYPTO_SHA512_SIZE])
 {
-    unsigned long long plaintext_length = decrypt_data_symmetric_xaead(shared_key, nonce,
+    static const uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
+
+    unsigned long long plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           ciphertext, encrypted_length, plaintext,
                                           hash, CRYPTO_SHA512_SIZE);
 

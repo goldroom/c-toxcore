@@ -68,6 +68,11 @@ extern "C" {
 #define CRYPTO_NONCE_SIZE              24
 
 /**
+ * @brief NoiseIK: The number of bytes in a nonce used for encryption/decryption (ChaChaPoly-1305-IETF).
+ */
+#define CRYPTO_NOISEIK_NONCE_SIZE              12
+
+/**
  * @brief The number of bytes in a SHA256 hash.
  */
 #define CRYPTO_SHA256_SIZE             32
@@ -504,6 +509,35 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
 /* Necessary functions for Noise, cf. https://noiseprotocol.org/noise.html (Revision 34) */
 
 /**
+ * @brief Encrypt message with precomputed shared key using ChaCha20-Poly1305.
+ *
+ * Encrypts plain of plain_length to encrypted of plain_length + @ref CRYPTO_MAC_SIZE
+ * using a shared key @ref CRYPTO_SYMMETRIC_KEY_SIZE big and a @ref CRYPTO_NONCE_SIZE
+ * byte nonce. The encrypted message, as well as a tag authenticating both the confidential
+ * message m and adlen bytes of non-confidential data ad, are put into encrypted.
+ *
+ * @retval -1 if there was a problem.
+ * @return length of encrypted data if everything was fine.
+ */
+non_null(1, 2, 3, 5) nullable(6)
+size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
+                                    uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
+
+/**
+ * @brief Decrypt message with precomputed shared key using ChaCha20-Poly1305.
+ *
+ * Decrypts encrypted of encrypted_length to plain of length
+ * `length - CRYPTO_MAC_SIZE` using a shared key @ref CRYPTO_SHARED_KEY_SIZE
+ * big and a @ref CRYPTO_NONCE_SIZE byte nonce.
+ *
+ * @retval -1 if there was a problem (decryption failed).
+ * @return length of plain data if everything was fine.
+ */
+non_null(1, 2, 3, 5) nullable(6)
+size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
+                                    uint8_t *plain, const uint8_t *ad, size_t ad_length);
+
+/**
  * @brief Encrypt message with precomputed shared key using XChaCha20-Poly1305.
  *
  * Encrypts plain of plain_length to encrypted of plain_length + @ref CRYPTO_MAC_SIZE
@@ -640,7 +674,7 @@ void noise_mix_hash(uint8_t hash[CRYPTO_SHA512_SIZE], const uint8_t *data, size_
 non_null()
 void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
                             size_t plain_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                            uint8_t hash[CRYPTO_SHA512_SIZE], uint8_t nonce[CRYPTO_NONCE_SIZE]);
+                            uint8_t hash[CRYPTO_SHA512_SIZE]);
 
 /**
  * @brief DecryptAndHash(ciphertext): Sets plaintext = DecryptWithAd(h,
@@ -660,9 +694,9 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
  * @param nonce used for XEAD decryption
  */
 non_null()
-int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
+int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext, 
                            size_t encrypted_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                           uint8_t hash[CRYPTO_SHA512_SIZE], uint8_t nonce[CRYPTO_NONCE_SIZE]);
+                           uint8_t hash[CRYPTO_SHA512_SIZE]);
 
 #ifdef __cplusplus
 } /* extern "C" */
