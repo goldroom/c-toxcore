@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sodium.h>
@@ -188,6 +189,7 @@ uint8_t resp_ephemeral[32] = {
     0x79, 0x3d, 0x5e, 0x63, 0xda, 0x6b, 0x37, 0x5b
 };
 
+// 4c 75 64 77 69 67 20 76 6f 6e 20 4d 69 73 65 73
 uint8_t payload1[16] = {
         0x4c, 0x75, 0x64, 0x77, 0x69, 0x67, 0x20, 0x76, 0x6f,
         0x6e, 0x20, 0x4d, 0x69, 0x73, 0x65, 0x73
@@ -334,9 +336,24 @@ static void test_fast_known2(void)
     // ck_assert_msg(memcmp(test_m, m, sizeof(m)) == 0, "decrypted text doesn't match test vector");
     // ck_assert_msg(mlen == sizeof(m) / sizeof(uint8_t), "wrong plaintext length");
 
+    char h_print[CRYPTO_SHA512_SIZE * 2 + 1];
+    char ck_print[CRYPTO_SHA512_SIZE * 2 + 1];
+    char key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+
     // INITIATOR:
     Noise_Handshake *noise_handshake = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
+    bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
+    printf("noise_handshake->hash: %s\n", h_print);
+    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    printf("noise_handshake->chaining_key: %s\n", ck_print);
+    
     noise_handshake_init(nullptr, noise_handshake, init_static, init_remote_static, true);
+
+    
+    bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
+    printf("noise_handshake->hash: %s\n", h_print);
+    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    printf("noise_handshake->chaining_key: %s\n", ck_print);
 
     memcpy(noise_handshake->ephemeral_private, init_ephemeral, CRYPTO_SECRET_KEY_SIZE);
     crypto_derive_public_key(noise_handshake->ephemeral_public, init_ephemeral);
@@ -362,6 +379,11 @@ static void test_fast_known2(void)
     /* es */
     uint8_t noise_handshake_temp_key[CRYPTO_SHARED_KEY_SIZE];
     noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->ephemeral_private, noise_handshake->remote_static);
+    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    printf("noise_handshake->chaining_key (after es): %s\n", ck_print);
+
+    bin2hex_toupper(key_print, sizeof(key_print), noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
+    printf("noise_handshake_temp_key (after es): %s\n", key_print);
 
     /* s */
     //TODO: remove; not necessary to due change to ChaCha20-Poly1305 instead of XChaCha20-Poly1305
