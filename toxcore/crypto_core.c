@@ -720,6 +720,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
     // memcpy(output1, output, first_len);
 
     /* Expand both keys in one operation (verified): */ 
+    /* HKDF -> T(0) + T(1); cf. RFC TODO: */
     uint8_t output_temp[CRYPTO_SHA512_SIZE*2];
     crypto_kdf_hkdf_sha512_expand(output_temp, CRYPTO_SHA512_SIZE*2, nullptr, 0, temp_key);
     memcpy(output1, output_temp, first_len);

@@ -1,3 +1,4 @@
+#include <bits/stdint-uintn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -190,9 +191,20 @@ uint8_t resp_ephemeral[32] = {
 };
 
 // 4c 75 64 77 69 67 20 76 6f 6e 20 4d 69 73 65 73
-uint8_t payload1[16] = {
+uint8_t payload_hs_initiator[16] = {
         0x4c, 0x75, 0x64, 0x77, 0x69, 0x67, 0x20, 0x76, 0x6f,
         0x6e, 0x20, 0x4d, 0x69, 0x73, 0x65, 0x73
+    };
+
+// 4d 75 72 72 61 79 20 52 6f 74 68 62 61 72 64
+uint8_t payload_hs_responder[15] = {
+        0x4d, 0x75, 0x72, 0x72, 0x61, 0x79, 0x20, 0x52, 
+        0x6f, 0x74, 0x68, 0x62, 0x61, 0x72, 0x64
+    };
+
+// 46 2e 20 41 2e 20 48 61 79 65 6b
+uint8_t payload_transport_initiator1[11] = {
+        0x46, 0x2e, 0x20, 0x41, 0x2e, 0x20, 0x48, 0x61, 0x79, 0x65, 0x6b
     };
 
 static void test_fast_known2(void)
@@ -340,25 +352,28 @@ static void test_fast_known2(void)
     char ck_print[CRYPTO_SHA512_SIZE * 2 + 1];
     char key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
 
-    // INITIATOR:
-    Noise_Handshake *noise_handshake = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
-    bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
-    printf("noise_handshake->hash: %s\n", h_print);
-    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
-    printf("noise_handshake->chaining_key: %s\n", ck_print);
-    noise_handshake_init(nullptr, noise_handshake, init_static, init_remote_static, true);
+    // INITIATOR: Create handshake packet for responder
+    Noise_Handshake *noise_handshake_initiator = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
 
-    
-    bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
-    printf("noise_handshake->hash: %s\n", h_print);
-    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
-    printf("noise_handshake->chaining_key: %s\n", ck_print);
+    /* Troubleshooting info, intermediary values */
+    // bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->hash: %s\n", h_print);
+    // bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->chaining_key: %s\n", ck_print);
 
-    memcpy(noise_handshake->ephemeral_private, init_ephemeral, CRYPTO_SECRET_KEY_SIZE);
-    crypto_derive_public_key(noise_handshake->ephemeral_public, init_ephemeral);
+    noise_handshake_init(nullptr, noise_handshake_initiator, init_static, init_remote_static, true);
+
+    /* Troubleshooting info, intermediary values */
+    // bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->hash: %s\n", h_print);
+    // bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->chaining_key: %s\n", ck_print);
+
+    memcpy(noise_handshake_initiator->ephemeral_private, init_ephemeral, CRYPTO_SECRET_KEY_SIZE);
+    crypto_derive_public_key(noise_handshake_initiator->ephemeral_public, init_ephemeral);
 
     char ephemeral_public_print[32 * 2 + 1];
-    bin2hex_toupper(ephemeral_public_print, sizeof(ephemeral_public_print), noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+    bin2hex_toupper(ephemeral_public_print, sizeof(ephemeral_public_print), noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
     printf("ephemeral_public_print: %s\n", ephemeral_public_print);
 
     char resp_static_print[32 * 2 + 1];
@@ -368,21 +383,22 @@ static void test_fast_known2(void)
     printf("resp_static_pub: %s\n", resp_static_print);
 
     /* e */
-    noise_mix_hash(noise_handshake->hash, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+    noise_mix_hash(noise_handshake_initiator->hash, noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
 
-    //TODO: remove from production code
+    /* Troubleshooting info, intermediary values */
     // char log_hash1[CRYPTO_SHA512_SIZE*2+1];
     // bytes2string(log_hash1, sizeof(log_hash1), noise_handshake->hash, CRYPTO_SHA512_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "hash1 INITIATOR: %s", log_hash1);
 
     /* es */
     uint8_t noise_handshake_temp_key[CRYPTO_SHARED_KEY_SIZE];
-    noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->ephemeral_private, noise_handshake->remote_static);
-    bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
-    printf("noise_handshake->chaining_key (after es): %s\n", ck_print);
+    noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key, noise_handshake_initiator->ephemeral_private, noise_handshake_initiator->remote_static);
 
-    bin2hex_toupper(key_print, sizeof(key_print), noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
-    printf("noise_handshake_temp_key (after es): %s\n", key_print);
+    /* Troubleshooting info, intermediary values */
+    // bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->chaining_key (after es): %s\n", ck_print);
+    // bin2hex_toupper(key_print, sizeof(key_print), noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
+    // printf("noise_handshake_temp_key (after es): %s\n", key_print);
 
     /* s */
     //TODO: remove; not necessary to due change to ChaCha20-Poly1305 instead of XChaCha20-Poly1305
@@ -393,12 +409,12 @@ static void test_fast_known2(void)
 
     /* Nonce for static pub key encryption is _always_ 0 in case of ChaCha20-Poly1305 */
     uint8_t ciphertext1[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE];
-    noise_encrypt_and_hash(ciphertext1, noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, noise_handshake_temp_key,
-                            noise_handshake->hash);
+    noise_encrypt_and_hash(ciphertext1, noise_handshake_initiator->static_public, CRYPTO_PUBLIC_KEY_SIZE, noise_handshake_temp_key,
+                            noise_handshake_initiator->hash);
 
     char ciphertext1_print[sizeof(ciphertext1) * 2 + 1];
     bin2hex_toupper(ciphertext1_print, sizeof(ciphertext1_print), ciphertext1, sizeof(ciphertext1));
-    printf("ciphertext1_print: %s\n", ciphertext1_print);
+    printf("Initiator: HS ciphertext static pub key: %s\n", ciphertext1_print);
 
     //TODO: remove from production code
     // char log_hash2[CRYPTO_SHA512_SIZE*2+1];
@@ -409,11 +425,12 @@ static void test_fast_known2(void)
     // LOGGER_DEBUG(c->log, "ephemeral public: %s", log_ephemeral);
 
     /* ss */
-    noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->static_private, noise_handshake->remote_static);
+    noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key, 
+        noise_handshake_initiator->static_private, noise_handshake_initiator->remote_static);
 
     /* Noise Handshake Payload */
     // uint8_t handshake_payload_plain[15];
-    uint8_t ciphertext2[sizeof(payload1) + CRYPTO_MAC_SIZE];
+    uint8_t ciphertext2[sizeof(payload_hs_initiator) + CRYPTO_MAC_SIZE];
 
     //TODO: remove; not necessary to due change to ChaCha20-Poly1305 instead of XChaCha20-Poly1305
     /* Add Handshake payload nonce */
@@ -424,12 +441,151 @@ static void test_fast_known2(void)
 
     /* Nonce for payload encryption is _always_ 0 in case of ChaCha20-Poly1305 */
     noise_encrypt_and_hash(ciphertext2,
-                            payload1, sizeof(payload1), noise_handshake_temp_key,
-                            noise_handshake->hash);
+                            payload_hs_initiator, sizeof(payload_hs_initiator), noise_handshake_temp_key,
+                            noise_handshake_initiator->hash);
 
     char ciphertext2_print[sizeof(ciphertext2) * 2 + 1];
     bin2hex_toupper(ciphertext2_print, sizeof(ciphertext2_print), ciphertext2, sizeof(ciphertext2));
-    printf("ciphertext2_print: %s\n", ciphertext2_print);
+    printf("Initiator: HS ciphertext payload: %s\n", ciphertext2_print);
+
+    // INITIATOR: END Create handshake packet for responder
+
+    // RESPONDER: Consume handshake packet from initiator
+    Noise_Handshake *noise_handshake_responder = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
+
+    /* Troubleshooting info, intermediary values */
+    // bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->hash: %s\n", h_print);
+    // bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
+    // printf("noise_handshake->chaining_key: %s\n", ck_print);
+
+    char init_static_print[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+    uint8_t init_static_pub[CRYPTO_PUBLIC_KEY_SIZE];
+    crypto_derive_public_key(init_static_pub, init_static);
+    bin2hex_toupper(init_static_print, sizeof(init_static_print), init_static_pub, CRYPTO_PUBLIC_KEY_SIZE);
+    printf("init_static_pub: %s\n", init_static_print);
+
+    noise_handshake_init(nullptr, noise_handshake_responder, resp_static, init_static_pub, false);
+
+    /* e */
+    memcpy(noise_handshake_responder->remote_ephemeral, noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+    noise_mix_hash(noise_handshake_responder->hash, noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+
+    /* es */
+    uint8_t noise_handshake_temp_key_resp[CRYPTO_SHARED_KEY_SIZE];
+    noise_mix_key(noise_handshake_responder->chaining_key, noise_handshake_temp_key_resp, 
+        noise_handshake_responder->static_private, noise_handshake_responder->remote_ephemeral);
+
+    /* s */ 
+    noise_decrypt_and_hash(noise_handshake_responder->remote_static, ciphertext1, CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE,
+                                       noise_handshake_temp_key_resp, noise_handshake_responder->hash);
+
+    /* ss */
+    noise_mix_key(noise_handshake_responder->chaining_key, noise_handshake_temp_key_resp, noise_handshake_responder->static_private, 
+        noise_handshake_responder->remote_static);
+
+    /* Payload decryption */
+    uint8_t handshake_payload_plain_initiator[sizeof(payload_hs_initiator)];
+    noise_decrypt_and_hash(handshake_payload_plain_initiator, ciphertext2,
+                                       sizeof(ciphertext2), noise_handshake_temp_key_resp,
+                                       noise_handshake_responder->hash);
+
+    // RESPONDER: Create handshake packet for initiator
+
+    /* set ephemeral private+public */
+    memcpy(noise_handshake_responder->ephemeral_private, resp_ephemeral, CRYPTO_SECRET_KEY_SIZE);
+    crypto_derive_public_key(noise_handshake_responder->ephemeral_public, resp_ephemeral);
+
+    char ephemeral_public_print_responder[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+    bin2hex_toupper(ephemeral_public_print_responder, sizeof(ephemeral_public_print_responder), noise_handshake_responder->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+    printf("Responder ephemeral public:: %s\n", ephemeral_public_print_responder);
+
+    /* e */
+    noise_mix_hash(noise_handshake_responder->hash, noise_handshake_responder->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+
+    /* ee */
+    uint8_t noise_handshake_temp_key_resp2[CRYPTO_SHARED_KEY_SIZE];
+    noise_mix_key(noise_handshake_responder->chaining_key, noise_handshake_temp_key_resp2, noise_handshake_responder->ephemeral_private, 
+        noise_handshake_responder->remote_ephemeral);
+
+    /* se */
+    noise_mix_key(noise_handshake_responder->chaining_key, noise_handshake_temp_key_resp2, noise_handshake_responder->ephemeral_private, 
+        noise_handshake_responder->remote_static);
+
+    
+    /* Nonce for payload encryption is _always_ 0 in case of ChaCha20-Poly1305 */
+    uint8_t ciphertext3_hs_responder[sizeof(payload_hs_responder) + CRYPTO_MAC_SIZE];
+    noise_encrypt_and_hash(ciphertext3_hs_responder,
+                            payload_hs_responder, sizeof(payload_hs_responder), noise_handshake_temp_key_resp2,
+                            noise_handshake_responder->hash);
+
+    char ciphertext3_print[sizeof(ciphertext3_hs_responder) * 2 + 1];
+    bin2hex_toupper(ciphertext3_print, sizeof(ciphertext3_print), ciphertext3_hs_responder, sizeof(ciphertext3_hs_responder));
+    printf("Responder: HS ciphertext payload: %s\n", ciphertext3_print);
+
+    // RESPONDER: END create handshake packet for initiator#
+
+    // INITIATOR: Consume handshake packet from responder
+    memcpy(noise_handshake_initiator->remote_ephemeral, noise_handshake_responder->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+    noise_mix_hash(noise_handshake_initiator->hash, noise_handshake_initiator->remote_ephemeral, CRYPTO_PUBLIC_KEY_SIZE);
+
+    /* ee */
+    uint8_t noise_handshake_temp_key_init[CRYPTO_SHARED_KEY_SIZE];
+    noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key_init, noise_handshake_initiator->ephemeral_private, 
+        noise_handshake_initiator->remote_ephemeral);
+
+    /* se */
+    noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key_init, noise_handshake_initiator->static_private, 
+        noise_handshake_initiator->remote_ephemeral);
+
+    uint8_t handshake_payload_plain_responder[sizeof(payload_hs_responder)];
+    if(noise_decrypt_and_hash(handshake_payload_plain_initiator, ciphertext3_hs_responder,
+                                    sizeof(ciphertext3_hs_responder), noise_handshake_temp_key_init,
+                                    noise_handshake_initiator->hash) != sizeof(payload_hs_responder)) {
+                                    printf("Initiator: HS decryption failed\n");
+    }
+
+    /* INITIATOR Noise Split(), nonces already set in crypto connection */
+    uint8_t initiator_send_key[CRYPTO_SHARED_KEY_SIZE];
+    uint8_t initiator_recv_key[CRYPTO_SHARED_KEY_SIZE];
+    crypto_hkdf(initiator_send_key, CRYPTO_SHARED_KEY_SIZE, initiator_recv_key, CRYPTO_SHARED_KEY_SIZE, nullptr, 0, 
+        noise_handshake_initiator->chaining_key);
+
+    char handshake_hash_initiator_print[sizeof(noise_handshake_initiator->hash) * 2 + 1];
+    bin2hex_toupper(handshake_hash_initiator_print, sizeof(handshake_hash_initiator_print), noise_handshake_initiator->hash, sizeof(noise_handshake_initiator->hash));
+    printf("Initiator: final handshake hash: %s\n", handshake_hash_initiator_print);
+
+    /* Troubleshooting info, intermediary values */
+    char initiator_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    char initiator_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    bin2hex_toupper(initiator_send_key_print, sizeof(initiator_send_key_print), initiator_send_key, CRYPTO_SHARED_KEY_SIZE);
+    printf("initiator_send_key_print: %s\n", initiator_send_key_print);
+    bin2hex_toupper(initiator_recv_key_print, sizeof(initiator_recv_key_print), initiator_recv_key, CRYPTO_SHARED_KEY_SIZE);
+    printf("initiator_recv_key_print: %s\n", initiator_recv_key_print);
+
+    uint8_t ciphertext4_transport1_initiator[sizeof(payload_transport_initiator1) + CRYPTO_MAC_SIZE];
+    size_t length = encrypt_data_symmetric_aead(initiator_send_key, 0, payload_transport_initiator1, sizeof(payload_transport_initiator1), ciphertext4_transport1_initiator, nullptr, 0);
+    
+    char ciphertext4_transport1_initiator_print[sizeof(ciphertext4_transport1_initiator) * 2 + 1];
+    bin2hex_toupper(ciphertext4_transport1_initiator_print, sizeof(ciphertext4_transport1_initiator_print), ciphertext4_transport1_initiator, sizeof(ciphertext4_transport1_initiator));
+    printf("Initiator: Transport1 ciphertext: %s\n", ciphertext4_transport1_initiator_print);
+
+    /* RESPONDER Noise Split(): vice-verse keys in comparison to initiator */
+    uint8_t responder_send_key[CRYPTO_SHARED_KEY_SIZE];
+    uint8_t responder_recv_key[CRYPTO_SHARED_KEY_SIZE];
+    crypto_hkdf(responder_recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, responder_send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, noise_handshake_responder->chaining_key);
+
+    /* Troubleshooting info, intermediary values */
+    char responder_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    char responder_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    bin2hex_toupper(responder_send_key_print, sizeof(responder_send_key_print), responder_send_key, CRYPTO_SHARED_KEY_SIZE);
+    printf("responder_send_key_print: %s\n", responder_send_key_print);
+    bin2hex_toupper(responder_recv_key_print, sizeof(responder_recv_key_print), responder_recv_key, CRYPTO_SHARED_KEY_SIZE);
+    printf("responder_recv_key_print: %s\n", responder_recv_key_print);
+
+    char handshake_hash_responder_print[sizeof(noise_handshake_responder->hash) * 2 + 1];
+    bin2hex_toupper(handshake_hash_responder_print, sizeof(handshake_hash_responder_print), noise_handshake_responder->hash, sizeof(noise_handshake_responder->hash));
+    printf("Responder: final handshake hash: %s\n", handshake_hash_responder_print);
 }
 
 // static void test_endtoend(void)
