@@ -540,7 +540,7 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
  * @return length of encrypted data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
+int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
                                     uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
 
 /**
@@ -554,7 +554,7 @@ size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SI
  * @return length of plain data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
+int32_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
 /**
@@ -569,7 +569,7 @@ size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SI
  * @return length of encrypted data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
+int32_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
                                     uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
 
 /**
@@ -583,7 +583,7 @@ size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
  * @return length of plain data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-size_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
+int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
 /**

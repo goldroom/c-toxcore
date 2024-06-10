@@ -1,3 +1,4 @@
+#include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -204,7 +205,25 @@ uint8_t payload_hs_responder[15] = {
 
 // 46 2e 20 41 2e 20 48 61 79 65 6b
 uint8_t payload_transport_initiator1[11] = {
-        0x46, 0x2e, 0x20, 0x41, 0x2e, 0x20, 0x48, 0x61, 0x79, 0x65, 0x6b
+        0x46, 0x2e, 0x20, 0x41, 0x2e, 0x20, 0x48, 0x61, 0x79, 
+        0x65, 0x6b
+    };
+
+// 43 61 72 6c 20 4d 65 6e 67 65 72
+uint8_t payload_transport_responder1[11] = {
+        0x43, 0x61, 0x72, 0x6c, 0x20, 0x4d, 0x65, 0x6e, 0x67, 0x65, 0x72
+    };
+
+// 4a 65 61 6e 2d 42 61 70 74 69 73 74 65 20 53 61 79
+uint8_t payload_transport_initiator2[17] = {
+        0x4a, 0x65, 0x61, 0x6e, 0x2d, 0x42, 0x61, 0x70, 0x74, 0x69, 0x73, 
+        0x74, 0x65, 0x20, 0x53, 0x61, 0x79
+};
+
+// 45 75 67 65 6e 20 42 f6 68 6d 20 76 6f 6e 20 42 61 77 65 72 6b
+uint8_t payload_transport_responder2[21] = {
+        0x45, 0x75, 0x67, 0x65, 0x6e, 0x20, 0x42, 0xf6, 0x68, 0x6d, 0x20, 
+        0x76, 0x6f, 0x6e, 0x20, 0x42, 0x61, 0x77, 0x65, 0x72, 0x6b
     };
 
 static void test_fast_known2(void)
@@ -556,36 +575,69 @@ static void test_fast_known2(void)
     printf("Initiator: final handshake hash: %s\n", handshake_hash_initiator_print);
 
     /* Troubleshooting info, intermediary values */
-    char initiator_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
-    char initiator_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
-    bin2hex_toupper(initiator_send_key_print, sizeof(initiator_send_key_print), initiator_send_key, CRYPTO_SHARED_KEY_SIZE);
-    printf("initiator_send_key_print: %s\n", initiator_send_key_print);
-    bin2hex_toupper(initiator_recv_key_print, sizeof(initiator_recv_key_print), initiator_recv_key, CRYPTO_SHARED_KEY_SIZE);
-    printf("initiator_recv_key_print: %s\n", initiator_recv_key_print);
+    // char initiator_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    // char initiator_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    // bin2hex_toupper(initiator_send_key_print, sizeof(initiator_send_key_print), initiator_send_key, CRYPTO_SHARED_KEY_SIZE);
+    // printf("initiator_send_key_print: %s\n", initiator_send_key_print);
+    // bin2hex_toupper(initiator_recv_key_print, sizeof(initiator_recv_key_print), initiator_recv_key, CRYPTO_SHARED_KEY_SIZE);
+    // printf("initiator_recv_key_print: %s\n", initiator_recv_key_print);
 
     uint8_t ciphertext4_transport1_initiator[sizeof(payload_transport_initiator1) + CRYPTO_MAC_SIZE];
-    size_t length = encrypt_data_symmetric_aead(initiator_send_key, 0, payload_transport_initiator1, sizeof(payload_transport_initiator1), ciphertext4_transport1_initiator, nullptr, 0);
+    uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
+    int32_t length = encrypt_data_symmetric_aead(initiator_send_key, nonce_chacha20_ietf, payload_transport_initiator1, sizeof(payload_transport_initiator1), ciphertext4_transport1_initiator, nullptr, 0);
     
     char ciphertext4_transport1_initiator_print[sizeof(ciphertext4_transport1_initiator) * 2 + 1];
     bin2hex_toupper(ciphertext4_transport1_initiator_print, sizeof(ciphertext4_transport1_initiator_print), ciphertext4_transport1_initiator, sizeof(ciphertext4_transport1_initiator));
-    printf("Initiator: Transport1 ciphertext: %s\n", ciphertext4_transport1_initiator_print);
+    printf("Initiator: Transport1 ciphertext: (length: %d) %s\n", length, ciphertext4_transport1_initiator_print);
 
     /* RESPONDER Noise Split(): vice-verse keys in comparison to initiator */
     uint8_t responder_send_key[CRYPTO_SHARED_KEY_SIZE];
     uint8_t responder_recv_key[CRYPTO_SHARED_KEY_SIZE];
     crypto_hkdf(responder_recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, responder_send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, noise_handshake_responder->chaining_key);
 
-    /* Troubleshooting info, intermediary values */
-    char responder_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
-    char responder_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
-    bin2hex_toupper(responder_send_key_print, sizeof(responder_send_key_print), responder_send_key, CRYPTO_SHARED_KEY_SIZE);
-    printf("responder_send_key_print: %s\n", responder_send_key_print);
-    bin2hex_toupper(responder_recv_key_print, sizeof(responder_recv_key_print), responder_recv_key, CRYPTO_SHARED_KEY_SIZE);
-    printf("responder_recv_key_print: %s\n", responder_recv_key_print);
-
     char handshake_hash_responder_print[sizeof(noise_handshake_responder->hash) * 2 + 1];
     bin2hex_toupper(handshake_hash_responder_print, sizeof(handshake_hash_responder_print), noise_handshake_responder->hash, sizeof(noise_handshake_responder->hash));
     printf("Responder: final handshake hash: %s\n", handshake_hash_responder_print);
+
+    /* Troubleshooting info, intermediary values */
+    // char responder_send_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    // char responder_recv_key_print[CRYPTO_SHARED_KEY_SIZE * 2 + 1];
+    // bin2hex_toupper(responder_send_key_print, sizeof(responder_send_key_print), responder_send_key, CRYPTO_SHARED_KEY_SIZE);
+    // printf("responder_send_key_print: %s\n", responder_send_key_print);
+    // bin2hex_toupper(responder_recv_key_print, sizeof(responder_recv_key_print), responder_recv_key, CRYPTO_SHARED_KEY_SIZE);
+    // printf("responder_recv_key_print: %s\n", responder_recv_key_print);
+
+    uint8_t ciphertext5_transport1_responder[sizeof(payload_transport_responder1) + CRYPTO_MAC_SIZE];
+    int32_t length_ciphertext5_transport1_responder = encrypt_data_symmetric_aead(responder_send_key, nonce_chacha20_ietf, 
+        payload_transport_responder1, sizeof(payload_transport_responder1), ciphertext5_transport1_responder, nullptr, 0);
+
+    char ciphertext5_transport1_responder_print[sizeof(ciphertext5_transport1_responder) * 2 + 1];
+    bin2hex_toupper(ciphertext5_transport1_responder_print, sizeof(ciphertext5_transport1_responder_print), ciphertext5_transport1_responder, sizeof(ciphertext5_transport1_responder));
+    printf("Responder: Transport1 ciphertext: (length: %d) %s\n", length_ciphertext5_transport1_responder, ciphertext5_transport1_responder_print);
+
+    //TODO: Last two ciphertext currently not the same, maybe nonce is the problem
+    // sodium_increment(nonce_chacha20_ietf, CRYPTO_NOISEIK_NONCE_SIZE);
+    // // uint8_t nonce_chacha20_ietf_1[CRYPTO_NOISEIK_NONCE_SIZE] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0x00,0x00,0x00,
+    //     // 0x00, 0x01 };
+    // uint8_t ciphertext6_transport2_initiator[sizeof(payload_transport_initiator2) + CRYPTO_MAC_SIZE];
+    // int32_t ciphertext6_transport2_initiator_length = encrypt_data_symmetric_aead(initiator_send_key, nonce_chacha20_ietf, 
+    //     payload_transport_initiator2, sizeof(payload_transport_initiator2), ciphertext6_transport2_initiator, nullptr, 0);
+    
+    // char ciphertext6_transport2_initiator_print[sizeof(ciphertext6_transport2_initiator) * 2 + 1];
+    // bin2hex_toupper(ciphertext6_transport2_initiator_print, sizeof(ciphertext6_transport2_initiator_print), 
+    //     ciphertext6_transport2_initiator, sizeof(ciphertext6_transport2_initiator));
+    // printf("Initiator: Transport2 ciphertext: (length: %d) %s\n", ciphertext6_transport2_initiator_length, ciphertext6_transport2_initiator_print);
+
+    // uint8_t ciphertext7_transport2_responder[sizeof(payload_transport_responder2) + CRYPTO_MAC_SIZE];
+    // int32_t length_ciphertext7_transport2_responder = encrypt_data_symmetric_aead(responder_send_key, nonce_chacha20_ietf, 
+    //     payload_transport_responder2, sizeof(payload_transport_responder2), ciphertext7_transport2_responder, nullptr, 0);
+
+    // char ciphertext7_transport2_responder_print[sizeof(ciphertext7_transport2_responder) * 2 + 1];
+    // bin2hex_toupper(ciphertext7_transport2_responder_print, sizeof(ciphertext7_transport2_responder_print), 
+    //     ciphertext7_transport2_responder, sizeof(ciphertext7_transport2_responder));
+    // printf("Responder: Transport2 ciphertext: (length: %d) %s\n", length_ciphertext7_transport2_responder, ciphertext7_transport2_responder_print);
+
+
 }
 
 // static void test_endtoend(void)

@@ -531,7 +531,7 @@ void random_bytes(const Random *rng, uint8_t *bytes, size_t length)
 
 /* Necessary functions for Noise, cf. https://noiseprotocol.org/noise.html (Revision 34) */
 
-size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
+int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -540,19 +540,20 @@ size_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SI
         return -1;
     }
 
-    unsigned long long encrypted_length = 0;
+    /* Passing NULL instead, encrypted length is clear anwyay (plain_length + crypto_aead_chacha20poly1305_IETF_ABYTES)  */
+    // unsigned long long encrypted_length = 0;
 
-    // nsec is not used by this particular construction and should always be NULL.
-    if (crypto_aead_chacha20poly1305_ietf_encrypt(encrypted, &encrypted_length, plain, plain_length,
+    /* nsec is not used by this particular construction and should always be NULL. */ 
+    if (crypto_aead_chacha20poly1305_ietf_encrypt(encrypted, NULL, plain, plain_length,
             ad, ad_length, nullptr, nonce, shared_key) != 0) {
         return -1;
     }
 
-    // assert(length < INT32_MAX - crypto_box_MACBYTES);
-    return encrypted_length;
+    assert(plain_length < INT32_MAX - crypto_aead_chacha20poly1305_IETF_ABYTES);
+    return (int32_t)(plain_length + crypto_aead_chacha20poly1305_IETF_ABYTES);
 }
 
-size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
+int32_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE],
                                     const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -562,19 +563,20 @@ size_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SI
         return -1;
     }
 
-    unsigned long long plain_length = 0;
+    /* Passing NULL instead, encrypted length is clear anwyay (plain_length + crypto_aead_chacha20poly1305_IETF_ABYTES)  */
+    // unsigned long long plain_length = 0;
 
-    if (crypto_aead_chacha20poly1305_ietf_decrypt(plain, &plain_length, nullptr, encrypted,
+    if (crypto_aead_chacha20poly1305_ietf_decrypt(plain, NULL, nullptr, encrypted,
             encrypted_length, ad, ad_length, nonce, shared_key) != 0) {
         return -1;
     }
 
-    // assert(length > crypto_box_MACBYTES);
-    // assert(length < INT32_MAX);
-    return plain_length;
+    assert(encrypted_length > crypto_aead_chacha20poly1305_IETF_ABYTES);
+    assert(encrypted_length < INT32_MAX);
+    return (int32_t)(encrypted_length - crypto_aead_chacha20poly1305_IETF_ABYTES);
 }
 
-size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
+int32_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -583,19 +585,20 @@ size_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
         return -1;
     }
 
-    unsigned long long encrypted_length = 0;
+    /* Passing NULL instead, encrypted length is clear anwyay (plain_length + crypto_aead_xchacha20poly1305_ietf_ABYTES)  */
+    // unsigned long long encrypted_length = 0;
 
     // nsec is not used by this particular construction and should always be NULL.
-    if (crypto_aead_xchacha20poly1305_ietf_encrypt(encrypted, &encrypted_length, plain, plain_length,
+    if (crypto_aead_xchacha20poly1305_ietf_encrypt(encrypted, NULL, plain, plain_length,
             ad, ad_length, nullptr, nonce, shared_key) != 0) {
         return -1;
     }
 
-    // assert(length < INT32_MAX - crypto_box_MACBYTES);
-    return encrypted_length;
+    assert(plain_length < INT32_MAX - crypto_aead_xchacha20poly1305_ietf_ABYTES);
+    return (int32_t)(plain_length + crypto_aead_xchacha20poly1305_ietf_ABYTES);
 }
 
-size_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
+int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                     const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
                                     const uint8_t *ad, size_t ad_length)
 {
@@ -605,16 +608,17 @@ size_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
         return -1;
     }
 
-    unsigned long long plain_length = 0;
+    /* Passing NULL instead, encrypted length is clear anwyay (plain_length + crypto_aead_xchacha20poly1305_ietf_ABYTES)  */
+    // unsigned long long plain_length = 0;
 
-    if (crypto_aead_xchacha20poly1305_ietf_decrypt(plain, &plain_length, nullptr, encrypted,
+    if (crypto_aead_xchacha20poly1305_ietf_decrypt(plain, NULL, nullptr, encrypted,
             encrypted_length, ad, ad_length, nonce, shared_key) != 0) {
         return -1;
     }
 
-    // assert(length > crypto_box_MACBYTES);
-    // assert(length < INT32_MAX);
-    return plain_length;
+    assert(encrypted_length > crypto_aead_xchacha20poly1305_ietf_ABYTES);
+    assert(encrypted_length < INT32_MAX);
+    return (int32_t)(encrypted_length - crypto_aead_xchacha20poly1305_ietf_ABYTES);
 }
 
 /*
@@ -814,7 +818,7 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISEIK_NONCE_SIZE);
 
-    unsigned long long encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
+    int32_t encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           plaintext, plain_length, ciphertext,
                                           hash, CRYPTO_SHA512_SIZE);
 
@@ -833,7 +837,7 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISEIK_NONCE_SIZE);
 
-    unsigned long long plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
+    int32_t plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           ciphertext, encrypted_length, plaintext,
                                           hash, CRYPTO_SHA512_SIZE);
 
