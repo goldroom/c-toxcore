@@ -632,7 +632,8 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
 // }
 
 // #define NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
-static const uint8_t noise_protocol[32] = "Noise_IK_25519_ChaChaPoly_SHA512";
+/* Actually only 32 bytes necessary, but test vectors still verify with 33 bytes */
+static const uint8_t noise_protocol[33] = "Noise_IK_25519_ChaChaPoly_SHA512";
 
 /**
  * cf. Noise sections 4.3 and 5.1
