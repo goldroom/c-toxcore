@@ -519,7 +519,7 @@ static const uint8_t handshake_hash[CRYPTO_SHA512_SIZE] = {
 //     0x76, 0x6f, 0x6e, 0x20, 0x42, 0x61, 0x77, 0x65, 0x72, 0x6b
 // };
 
-static void test_noiseik() 
+static void test_noiseik(void) 
 { 
     /* INITIATOR: Create handshake packet for responder */
     Noise_Handshake *noise_handshake_initiator = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
