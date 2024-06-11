@@ -649,7 +649,7 @@ static void test_noiseik(void)
     // bin2hex_toupper(init_static_print, sizeof(init_static_print), init_static_pub, CRYPTO_PUBLIC_KEY_SIZE);
     // printf("init_static_pub: %s\n", init_static_print);
 
-    noise_handshake_init(noise_handshake_responder, resp_static, init_static_pub, false, prologue, sizeof(prologue));
+    noise_handshake_init(noise_handshake_responder, resp_static, nullptr, false, prologue, sizeof(prologue));
 
     /* e */
     memcpy(noise_handshake_responder->remote_ephemeral, noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
@@ -728,12 +728,12 @@ static void test_noiseik(void)
     noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key_init, noise_handshake_initiator->static_private, 
         noise_handshake_initiator->remote_ephemeral);
 
-    // uint8_t handshake_payload_plain_responder[sizeof(resp_payload_hs)];
-    // if(noise_decrypt_and_hash(handshake_payload_plain_initiator, ciphertext3_hs_responder,
-    //                                 sizeof(ciphertext3_hs_responder), noise_handshake_temp_key_init,
-    //                                 noise_handshake_initiator->hash) != sizeof(resp_payload_hs)) {
-    //                                 printf("Initiator: HS decryption failed\n");
-    // }
+    uint8_t handshake_payload_plain_responder[sizeof(resp_payload_hs)];
+    if(noise_decrypt_and_hash(handshake_payload_plain_responder, ciphertext3_hs_responder,
+                                    sizeof(ciphertext3_hs_responder), noise_handshake_temp_key_init,
+                                    noise_handshake_initiator->hash) != sizeof(resp_payload_hs)) {
+                                    printf("Initiator: HS decryption failed\n");
+    }
 
     /* INITIATOR Noise Split(), nonces already set in crypto connection */
     uint8_t initiator_send_key[CRYPTO_SHARED_KEY_SIZE];
