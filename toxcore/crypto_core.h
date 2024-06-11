@@ -661,7 +661,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  * @return -1 on failure
  * @return 0 on success
  */
-non_null(2, 3) nullable(1, 4, 6)
+non_null(1, 2) nullable(3, 5)
 int noise_handshake_init
 (Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
 // int noise_handshake_init
@@ -696,7 +696,7 @@ int32_t noise_mix_key(uint8_t chaining_key[CRYPTO_SHA512_SIZE], uint8_t shared_k
  * @param data_len length of data to hash
  *
  */
-non_null()
+non_null(1) nullable(2)
 void noise_mix_hash(uint8_t hash[CRYPTO_SHA512_SIZE], const uint8_t *data, size_t data_len);
 
 /**
