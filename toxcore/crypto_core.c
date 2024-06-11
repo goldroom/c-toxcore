@@ -650,7 +650,7 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
     crypto_auth_hmacsha512(auth, data, data_length, key);
 }
 
-/* This is Hugo Krawczyk's HKDF:
+/* This is Hugo Krawczyk's HKDF (i.e. HKDF-SHA512):
  * - https://eprint.iacr.org/2010/264.pdf
  * - https://tools.ietf.org/html/rfc5869
  * HKDF(chaining_key, input_key_material, num_outputs): Takes a
@@ -668,67 +668,42 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
  * length. Also note that the HKDF() function is simply HKDF with the
  * chaining_key as HKDF salt, and zero-length HKDF info.
  */
-// void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2, 
-//                  size_t second_len, const uint8_t *data,
-//                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE])
-// {
-//     uint8_t output[CRYPTO_SHA512_SIZE + 1];
-//     // temp_key = secret in WG
-//     uint8_t temp_key[CRYPTO_SHA512_SIZE];
-
-//     /* Extract entropy from data into temp_key */
-//     // data => input_key_material => DH result in Noise
-//     crypto_hmac512(temp_key, chaining_key, data, data_len);
-
-//     /* Expand first key: key = temp_key, data = 0x1 */
-//     output[0] = 1;
-//     crypto_hmac512(output, temp_key, output, 1);
-//     memcpy(output1, output, first_len);
-
-//     /* Expand second key: key = secret, data = first-key || 0x2 */
-//     output[CRYPTO_SHA512_SIZE] = 2;
-//     crypto_hmac512(output, temp_key, output, CRYPTO_SHA512_SIZE + 1);
-//     memcpy(output2, output, second_len);
-
-//     /* Expand third key: key = temp_key, data = second-key || 0x3 */
-//     /* Currently output3 not used in Tox, maybe necessary in future for pre-shared symmetric keys (cf. Noise spec )*/
-//     // output[CRYPTO_SHA512_SIZE] = 3;
-//     // crypto_hmac512(output, temp_key, output, CRYPTO_SHA512_SIZE + 1);
-//     // memcpy(output3, output, third_len);
-
-//     /* Clear sensitive data from stack */
-//     crypto_memzero(temp_key, CRYPTO_SHA512_SIZE);
-//     crypto_memzero(output, CRYPTO_SHA512_SIZE + 1);
-// }
 void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2, 
                  size_t second_len, const uint8_t *data,
                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE])
 {
+    /* Implementing HKDF-SHA512 based on libsodium `crypto_auth_hmacsha512()` and WireGuard leads to wrong results. 
+     Verified using Noise_IK_25519_ChaChaPoly_SHA512 test vectors. Keeping for documentation purposes. */
     // uint8_t output[CRYPTO_SHA512_SIZE + 1];
     // temp_key = secret in WG
+
     uint8_t temp_key[CRYPTO_SHA512_SIZE];
 
     /* Extract entropy from data into temp_key */
-    // data => input_key_material => DH result in Noise
-    //TODO: This is correct, same result as crypto_kdf_hkdf_sha512_extract()
+    /* HKDF-Extract(salt, IKM) -> PRK, where chaining_key is HKDF salt, DH result (data) is input keying material (IKM) (and zero-length HKDF info in expand). 
+     Result is a pseudo random key (PRK) = temp_key */
+    /* data => input_key_material => X25519-DH result in Noise */ 
+    /* TODO: This is correct, same result as libsodium `crypto_kdf_hkdf_sha512_extract()` */
     // crypto_hmac512(temp_key, chaining_key, data, data_len);
-
     /* Noise spec: Note that temp_key, output1, output2, and output3 are all HASHLEN bytes in length. 
      Also note that the HKDF() function is simply HKDF from [4] with the chaining_key as HKDF salt, and zero-length HKDF info. */
     crypto_kdf_hkdf_sha512_extract(temp_key, chaining_key, CRYPTO_SHA512_SIZE, data, data_len);
 
     /* Expand first key: key = temp_key, data = 0x1 */
-    /* TODO: Not correct, unsure why */
+    /* TODO: Result not correct, unsure why */
     // output[0] = 1;
     // crypto_hmac512(output, temp_key, output, 1);
     // memcpy(output1, output, first_len);
 
     /* Expand both keys in one operation (verified): */ 
-    /* HKDF -> T(0) + T(1); cf. RFC TODO: */
+    /* HKDF-Expand(PRK, info, L) -> OKM, where PRK = temp_key, zero-length HKDF info (ctx)
+     and L (length of output keying material in octets) = 2*64 byte (i.e. 2x HashLen) */
+    /* OKM = HKDF -> T(0) + T(1); cf. RFC5869: https://datatracker.ietf.org/doc/html/rfc5869#section-2.3 */
+    /* ctx parameter = RFC5869 info -> i.e. optional context and application specific information (can be a zero-length string) */
     uint8_t output_temp[CRYPTO_SHA512_SIZE*2];
     crypto_kdf_hkdf_sha512_expand(output_temp, CRYPTO_SHA512_SIZE*2, nullptr, 0, temp_key);
     memcpy(output1, output_temp, first_len);
-    memcpy(output2, output_temp+CRYPTO_SHA512_SIZE, second_len);
+    memcpy(output2, output_temp + CRYPTO_SHA512_SIZE, second_len);
 
     /* Expand second key: key = secret, data = first-key || 0x2 */
     /* TODO: Not correct, unsure why */
@@ -737,23 +712,15 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
     // memcpy(output2, output, second_len);
 
     /* Expand third key: key = temp_key, data = second-key || 0x3 */
-    /* Currently output3 not used in Tox, maybe necessary in future for pre-shared symmetric keys (cf. Noise spec )*/
+    /* Currently output3 is not used in Tox, maybe necessary in future for pre-shared symmetric keys (cf. Noise spec )*/
     // output[CRYPTO_SHA512_SIZE] = 3;
     // crypto_hmac512(output, temp_key, output, CRYPTO_SHA512_SIZE + 1);
     // memcpy(output3, output, third_len);
 
-    // ctx = RFC5869 info -> i.e. optional context and application specific information (can be a zero-length string)
-    /* Works, correct result */
-    // crypto_kdf_hkdf_sha512_expand(output1, first_len, nullptr, 0, temp_key);
-
-    // ctx = RFC5869 info -> i.e. optional context and application specific information (can be a zero-length string)
-    /* Same result as expand1, so doesn't work like this */
-    // crypto_kdf_hkdf_sha512_expand(output2, second_len, 0, 0, temp_key);
-
     /* Clear sensitive data from stack */
     crypto_memzero(temp_key, CRYPTO_SHA512_SIZE);
     // crypto_memzero(output, CRYPTO_SHA512_SIZE + 1);
-    crypto_memzero(output_temp, CRYPTO_SHA512_SIZE + 1);
+    crypto_memzero(output_temp, CRYPTO_SHA512_SIZE*2);
 }
 
 /*
@@ -772,21 +739,15 @@ int32_t noise_mix_key(uint8_t chaining_key[CRYPTO_SHA512_SIZE],
     uint8_t dh_calculation[CRYPTO_SHARED_KEY_SIZE];
     memset(dh_calculation, 0, CRYPTO_SHARED_KEY_SIZE);
 
-    // X25519: returns plain DH result, afterwards hashed with HKDF
+    /* X25519: returns plain DH result, afterwards hashed with HKDF (necessary for NoiseIK) */ 
     if (crypto_scalarmult_curve25519(dh_calculation, private_key, public_key) != 0) {
         return -1;
     }
 
-    //uint8_t shared_key_temp[CRYPTO_SHA512_SIZE];
-
-    // chaining_key is HKDF output1 and shared_key is HKDF output2 => different values!
-    //TODO: change back to shared_key to shared_key_temp?
+    /* chaining_key is HKDF output1 and shared_key is HKDF output2 => different values/results! */
+    /* If HASHLEN is 64, then truncates temp_k (= shared_key) to 32 bytes. => done via call to crypto_hkdf() */ 
     crypto_hkdf(chaining_key, CRYPTO_SHA512_SIZE, shared_key, CRYPTO_SHARED_KEY_SIZE, dh_calculation,
                 CRYPTO_SHARED_KEY_SIZE, chaining_key);
-    // If HASHLEN is 64, then truncates temp_k to 32 bytes. => done via call to crypto_hkdf()
-    //TODO: no difference in case of libsodium HKDF in output
-    // memcpy(shared_key, shared_key_temp, CRYPTO_SHARED_KEY_SIZE);
-    // crypto_memzero(shared_key_temp, CRYPTO_SHA512_SIZE);
 
     crypto_memzero(dh_calculation, CRYPTO_SHARED_KEY_SIZE);
 
@@ -862,12 +823,14 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
  * @param self_secret_key static private ID X25519 key of this Tox instance
  * @param peer_public_key X25519 static ID public key from peer to connect to
  * @param initiator specifies if this Tox instance is the initiator of this crypto connection
+ * @param prologue specifies the prologue, used in call to MixHash(prologue) which maybe zero-length
+ * @param prologue_length length of prologue in bytes
  *
  * @return -1 on failure
  * @return 0 on success
  */
 int noise_handshake_init
-(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator)
+(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length)
 {
     //TODO: remove
     if (log != nullptr) {
@@ -885,13 +848,8 @@ int noise_handshake_init
     memcpy(noise_handshake->hash, temp_hash, CRYPTO_SHA512_SIZE);
     memcpy(noise_handshake->chaining_key, temp_hash, CRYPTO_SHA512_SIZE);
 
-    //TODO: remove prologue for test vectors
-    static const uint8_t prologue[] = {
-        // 50 72 6f 6c 6f 67 75 65 31 323 3
-        0x50, 0x72, 0x6f, 0x6c, 0x6f, 0x67, 0x75, 0x65, 0x31, 0x32, 0x33
-    };
-    //TODO: IMPORTANT need to call also with empty prologue? Should I add prologue again?!
-    noise_mix_hash(noise_handshake->hash, prologue, sizeof(prologue));
+    /* IMPORTANT needs to be called with (empty/zero-length) prologue! */ 
+    noise_mix_hash(noise_handshake->hash, prologue, prologue_length);
 
     //TODO: remove
     // char log_ck[CRYPTO_SHA512_SIZE*2+1];

@@ -606,7 +606,7 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
                     size_t data_length);
 
 /**
- * @brief Computes the number of provides outputs (=keys) with HKDF.
+ * @brief Computes the number of provides outputs (=keys) with HKDF-SHA512.
  *
  * cf. Noise sections 4.3 and 5.1
  *
@@ -636,7 +636,7 @@ void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_S
  * @param data_len length of either zero bytes, 32 bytes, or DHLEN bytes
  * @param chaining_key Noise 64 byte chaining key as HKDF salt
  */
- non_null(1, 3, 7) nullable(5)
+non_null(1, 3, 7) nullable(5)
 void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
                  size_t second_len, const uint8_t *data,
                  size_t data_len, const uint8_t chaining_key[CRYPTO_SHA512_SIZE]);
@@ -657,13 +657,15 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  * @param self_secret_key static private ID X25519 key of this Tox instance
  * @param peer_public_key X25519 static ID public key from peer to connect to
  * @param initiator specifies if this Tox instance is the initiator of this crypto connection
+ * @param prologue specifies the prologue, used in call to MixHash(prologue) which maybe zero-length
+ * @param prologue_length length of prologue in bytes
  *
  * @return -1 on failure
  * @return 0 on success
  */
- //TODO: non_null
+non_null(2, 3) nullable(1, 4, 6)
 int noise_handshake_init
-(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator);
+(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
 
 /**
  * @brief Noise MixKey(input_key_material)
