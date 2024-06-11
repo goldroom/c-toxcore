@@ -519,7 +519,8 @@ static const uint8_t handshake_hash[CRYPTO_SHA512_SIZE] = {
 //     0x76, 0x6f, 0x6e, 0x20, 0x42, 0x61, 0x77, 0x65, 0x72, 0x6b
 // };
 
-static void test_noiseik() { 
+static void test_noiseik() 
+{ 
     /* INITIATOR: Create handshake packet for responder */
     Noise_Handshake *noise_handshake_initiator = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
 
@@ -727,12 +728,12 @@ static void test_noiseik() {
     noise_mix_key(noise_handshake_initiator->chaining_key, noise_handshake_temp_key_init, noise_handshake_initiator->static_private, 
         noise_handshake_initiator->remote_ephemeral);
 
-    uint8_t handshake_payload_plain_responder[sizeof(resp_payload_hs)];
-    if(noise_decrypt_and_hash(handshake_payload_plain_initiator, ciphertext3_hs_responder,
-                                    sizeof(ciphertext3_hs_responder), noise_handshake_temp_key_init,
-                                    noise_handshake_initiator->hash) != sizeof(resp_payload_hs)) {
-                                    printf("Initiator: HS decryption failed\n");
-    }
+    // uint8_t handshake_payload_plain_responder[sizeof(resp_payload_hs)];
+    // if(noise_decrypt_and_hash(handshake_payload_plain_initiator, ciphertext3_hs_responder,
+    //                                 sizeof(ciphertext3_hs_responder), noise_handshake_temp_key_init,
+    //                                 noise_handshake_initiator->hash) != sizeof(resp_payload_hs)) {
+    //                                 printf("Initiator: HS decryption failed\n");
+    // }
 
     /* INITIATOR Noise Split(), nonces already set in crypto connection */
     uint8_t initiator_send_key[CRYPTO_SHARED_KEY_SIZE];
@@ -757,7 +758,7 @@ static void test_noiseik() {
 
     uint8_t ciphertext4_transport1_initiator[sizeof(init_payload_transport1) + CRYPTO_MAC_SIZE];
     uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
-    int32_t length = encrypt_data_symmetric_aead(initiator_send_key, nonce_chacha20_ietf, init_payload_transport1, sizeof(init_payload_transport1), ciphertext4_transport1_initiator, nullptr, 0);
+    encrypt_data_symmetric_aead(initiator_send_key, nonce_chacha20_ietf, init_payload_transport1, sizeof(init_payload_transport1), ciphertext4_transport1_initiator, nullptr, 0);
     
     ck_assert_msg(memcmp(ciphertext4_transport1_initiator, init_payload_transport1_encrypted, sizeof(init_payload_transport1_encrypted)) == 0, "initiator transport1 ciphertext differ");
 
@@ -787,7 +788,7 @@ static void test_noiseik() {
     // printf("responder_recv_key_print: %s\n", responder_recv_key_print);
 
     uint8_t ciphertext5_transport1_responder[sizeof(resp_payload_transport1) + CRYPTO_MAC_SIZE];
-    int32_t length_ciphertext5_transport1_responder = encrypt_data_symmetric_aead(responder_send_key, nonce_chacha20_ietf, 
+    encrypt_data_symmetric_aead(responder_send_key, nonce_chacha20_ietf, 
         resp_payload_transport1, sizeof(resp_payload_transport1), ciphertext5_transport1_responder, nullptr, 0);
 
     ck_assert_msg(memcmp(ciphertext5_transport1_responder, resp_payload_transport1_encrypted, sizeof(resp_payload_transport1_encrypted)) == 0, "responder transport1 ciphertext differ");
