@@ -626,10 +626,10 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
 * TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
 * bytes_to_string() from util.h
 */
-static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length)
-{   
-    bytes_to_string(bytes, bytes_length, string, string_length);
-}
+// static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length)
+// {   
+//     bytes_to_string(bytes, bytes_length, string, string_length);
+// }
 
 // #define NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
 static const uint8_t noise_protocol[32] = "Noise_IK_25519_ChaChaPoly_SHA512";

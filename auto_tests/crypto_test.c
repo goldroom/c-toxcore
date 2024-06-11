@@ -6,7 +6,8 @@
 #include "../toxcore/crypto_core.h"
 #include "../toxcore/net_crypto.h"
 #include "check_compat.h"
-#include "../other/fun/create_common.h"
+//TODO: necessary to print bytes
+// #include "../other/fun/create_common.h"
 
 static void rand_bytes(const Random *rng, uint8_t *b, size_t blen)
 {
