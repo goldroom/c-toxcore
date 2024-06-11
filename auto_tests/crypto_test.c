@@ -528,7 +528,7 @@ static void test_noiseik() {
     // bin2hex_toupper(ck_print, sizeof(ck_print), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE);
     // printf("noise_handshake->chaining_key: %s\n", ck_print);
 
-    noise_handshake_init(nullptr, noise_handshake_initiator, init_static, init_remote_static, true, prologue, sizeof(prologue));
+    noise_handshake_init(noise_handshake_initiator, init_static, init_remote_static, true, prologue, sizeof(prologue));
 
     /* Troubleshooting info, intermediary values */
     // bin2hex_toupper(h_print, sizeof(h_print), noise_handshake->hash, CRYPTO_SHA512_SIZE);
@@ -647,7 +647,7 @@ static void test_noiseik() {
     // bin2hex_toupper(init_static_print, sizeof(init_static_print), init_static_pub, CRYPTO_PUBLIC_KEY_SIZE);
     // printf("init_static_pub: %s\n", init_static_print);
 
-    noise_handshake_init(nullptr, noise_handshake_responder, resp_static, init_static_pub, false, prologue, sizeof(prologue));
+    noise_handshake_init(noise_handshake_responder, resp_static, init_static_pub, false, prologue, sizeof(prologue));
 
     /* e */
     memcpy(noise_handshake_responder->remote_ephemeral, noise_handshake_initiator->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);

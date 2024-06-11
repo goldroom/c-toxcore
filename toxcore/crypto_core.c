@@ -626,7 +626,7 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
 * TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
 * bytes_to_string() from util.h
 */
-static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length, const Logger *log)
+static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length)
 {   
     bytes_to_string(bytes, bytes_length, string, string_length);
 }
@@ -830,12 +830,12 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
  * @return 0 on success
  */
 int noise_handshake_init
-(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length)
+(Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length)
 {
     //TODO: remove
-    if (log != nullptr) {
-        LOGGER_DEBUG(log, "ENTERING");
-    }
+    // if (log != nullptr) {
+    //     LOGGER_DEBUG(log, "ENTERING");
+    // }
 
     //TODO: move to handle_packet_crypto_hs()?
     crypto_memzero(noise_handshake, sizeof(Noise_Handshake));
@@ -865,15 +865,15 @@ int noise_handshake_init
         crypto_derive_public_key(noise_handshake->static_public, self_secret_key);
 
         //TODO: remove
-        if (log != nullptr) {
-            char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-            bytes2string(log_spub, sizeof(log_spub), noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, log);
-            LOGGER_DEBUG(log, "static pub: %s", log_spub);
-        }
+        // if (log != nullptr) {
+        //     char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+        //     bytes2string(log_spub, sizeof(log_spub), noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, log);
+        //     LOGGER_DEBUG(log, "static pub: %s", log_spub);
+        // }
 
     } else {
         // fprintf(stderr, "Local static private key required, but not provided.\n");
-        LOGGER_DEBUG(log, "Local static private key required, but not provided.");
+        // LOGGER_DEBUG(log, "Local static private key required, but not provided.");
         return -1;
     }
     /* <- s: pre-message from responder to initiator => sets rs (only initiator) */
@@ -882,11 +882,11 @@ int noise_handshake_init
             memcpy(noise_handshake->remote_static, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: Remove
-            if (log != nullptr) {
-                char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-                bytes2string(log_spub, sizeof(log_spub), noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE, log);
-                LOGGER_DEBUG(log, "INITIATOR remote static: %s", log_spub);
-            }
+            // if (log != nullptr) {
+            //     char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+            //     bytes2string(log_spub, sizeof(log_spub), noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE, log);
+            //     LOGGER_DEBUG(log, "INITIATOR remote static: %s", log_spub);
+            // }
 
             /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
             noise_mix_hash(noise_handshake->hash, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -898,7 +898,7 @@ int noise_handshake_init
             // }
         } else {
             // fprintf(stderr, "Remote peer static public key required, but not provided.\n");
-            LOGGER_DEBUG(log, "Remote peer static public key required, but not provided.");
+            // LOGGER_DEBUG(log, "Remote peer static public key required, but not provided.");
             return -1;
         }
     }

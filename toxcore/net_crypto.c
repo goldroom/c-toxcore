@@ -2382,7 +2382,7 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
     }
 
     // Noise: only necessary if Cookie response was successful
-    if (conn->noise_handshake_enabled && noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, conn->public_key, true, nullptr, 0) != 0) {
+    if (conn->noise_handshake_enabled && noise_handshake_init(conn->noise_handshake, c->self_secret_key, conn->public_key, true, nullptr, 0) != 0) {
         return -1;
     }
 
@@ -2467,7 +2467,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 }
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGED TO RESPONDER");
-                if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
+                if (noise_handshake_init(conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
                 }
 
@@ -2502,7 +2502,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "RESPONDER: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
                 /* necessary, otherwise broken after INITIATOR to RESPONDER change; also necessary without change */
-                if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
+                if (noise_handshake_init(conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
                 }
                 /* Noise: peer_real_pk (=conn->public_key) not necessary here, but for call in handle_new_connection_handshake()
@@ -2922,7 +2922,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     if (length != HANDSHAKE_PACKET_LENGTH) {
         //TODO: adapt static allocation?
         n_c.noise_handshake = &n_c.noise_handshake_data;    
-        if (noise_handshake_init(nullptr, n_c.noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
+        if (noise_handshake_init(n_c.noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
             crypto_memzero(n_c.noise_handshake, sizeof(Noise_Handshake));
             n_c.noise_handshake = nullptr;
             mem_delete(c->mem, n_c.cookie);

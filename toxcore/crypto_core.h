@@ -16,7 +16,6 @@
 #include <stdint.h>
 
 #include "attributes.h"
-#include "logger.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -665,8 +664,9 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  */
 non_null(2, 3) nullable(1, 4, 6)
 int noise_handshake_init
-(const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
-
+(Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
+// int noise_handshake_init
+// (const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
 /**
  * @brief Noise MixKey(input_key_material)
  *
