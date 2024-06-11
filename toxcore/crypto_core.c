@@ -764,7 +764,9 @@ void noise_mix_hash(uint8_t hash[CRYPTO_SHA512_SIZE], const uint8_t *data, size_
 {
     VLA(uint8_t, to_hash, CRYPTO_SHA512_SIZE + data_len);
     memcpy(to_hash, hash, CRYPTO_SHA512_SIZE);
-    memcpy(to_hash + CRYPTO_SHA512_SIZE, data, data_len);
+    if (data != nullptr) {
+        memcpy(to_hash + CRYPTO_SHA512_SIZE, data, data_len);
+    }
     crypto_sha512(hash, to_hash, CRYPTO_SHA512_SIZE + data_len);
 }
 
