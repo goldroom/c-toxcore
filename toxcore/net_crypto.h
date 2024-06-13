@@ -416,7 +416,7 @@ void load_secret_key(Net_Crypto *c, const uint8_t *sk);
  */
 non_null()
 Net_Crypto *new_net_crypto(const Logger *log, const Memory *mem, const Random *rng, const Network *ns,
-                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info);
+                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, const bool noise_compatibility_enabled);
 
 /** return the optimal interval in ms for running do_net_crypto. */
 non_null()

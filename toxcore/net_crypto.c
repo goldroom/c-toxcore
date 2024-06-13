@@ -64,7 +64,7 @@ typedef struct Crypto_Connection {
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer */
 
-    // Necessary for Noise handshake
+    // Necessary for Noise handshake backwards compatibility
     bool noise_handshake_enabled;
     Noise_Handshake *noise_handshake;
     uint8_t send_key[CRYPTO_SHARED_KEY_SIZE];
@@ -179,6 +179,9 @@ struct Net_Crypto {
     uint32_t current_sleep_time;
 
     BS_List ip_port_list;
+
+    /* Sets backwards compatibility to non-Noise handshake to true or false */
+    bool noise_compatibility_enabled;
 };
 
 const uint8_t *nc_get_self_public_key(const Net_Crypto *c)
@@ -757,7 +760,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             return NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER;
         }
     }
-    /* non-Noise handshake */
+    /* non-Noise handshake, check for enabled backwards compatibility happens in create_send_handshake() */
     else {
         LOGGER_DEBUG(c->log, "non-Noise handshake");
         uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
@@ -1058,7 +1061,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             return true;
         }
     }
-    /* non-Noise handshake */
+    /* non-Noise handshake, check for enabled backwards compatibility happens in calling functions */
     else {
         LOGGER_DEBUG(c->log, "non-Noise handshake");
 
@@ -2107,7 +2110,7 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
         }
     }
     /* non-Noise handshake*/
-    else {
+    else if(c->noise_compatibility_enabled) {
         LOGGER_DEBUG(c->log, "non-Noise handshake");
         uint8_t handshake_packet[HANDSHAKE_PACKET_LENGTH];
 
@@ -2120,6 +2123,9 @@ static int create_send_handshake(Net_Crypto *c, int crypt_connection_id, const u
         if (new_temp_packet(c, crypt_connection_id, handshake_packet, sizeof(handshake_packet)) != 0) {
             return -1;
         }
+    }
+    else {
+        return -1;
     }
 
     send_temp_packet(c, crypt_connection_id);
@@ -2395,12 +2401,15 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
         } else {
             return -1;
         }
-    } else {
+    } else if (c->noise_compatibility_enabled) {
         /* non-Noise handshake */
         LOGGER_DEBUG(c->log, "non-Noise handshake");
         if (create_send_handshake(c, crypt_connection_id, cookie, conn->dht_public_key) != 0) {
             return -1;
         }
+    }
+    else {
+        return -1;
     }
 
     conn->status = CRYPTO_CONN_HANDSHAKE_SENT;
@@ -2451,8 +2460,10 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     if (length != HANDSHAKE_PACKET_LENGTH) {
         conn->noise_handshake_enabled = true;
         //TODO: Wipe noise_handshake etc. in this case?
-    } else {
+    } else if (c->noise_compatibility_enabled) {
         conn->noise_handshake_enabled = false;
+    } else {
+        return -1;
     }
 
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
@@ -2940,7 +2951,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             mem_delete(c->mem, n_c.cookie);
             return -1;
         }
-    } else { /* case non-Noise handshake */
+    } else if (c->noise_compatibility_enabled) { /* case non-Noise handshake */
         LOGGER_DEBUG(c->log, "non-Noise handshake");
         // Necessary for backwards compatibility
         n_c.noise_handshake = nullptr;
@@ -2949,6 +2960,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             mem_delete(c->mem, n_c.cookie);
             return -1;
         }
+    } else {
+        return -1;
     }
 
     //TODO: remove
@@ -3135,7 +3148,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 
     }
     /* non-Noise handshake */
-    else {
+    else if (c->noise_compatibility_enabled) {
         //TODO: remove
         LOGGER_DEBUG(c->log, "non-Noise handshake");
         memcpy(conn->public_key, n_c->public_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -3153,6 +3166,12 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
             wipe_crypto_connection(c, crypt_connection_id);
             return -1;
         }
+    } else {
+        pthread_mutex_lock(&c->tcp_mutex);
+        kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
+        pthread_mutex_unlock(&c->tcp_mutex);
+        wipe_crypto_connection(c, crypt_connection_id);
+        return -1;
     }
 
     memcpy(conn->dht_public_key, n_c->dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -3219,7 +3238,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->rtt_time = DEFAULT_PING_CONNECTION;
     memcpy(conn->dht_public_key, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
-    // Necessary for backwards compatibility to non-Noise handshake
+    // Necessary for backwards compatibility to non-Noise handshake (if enabled with option noise_compatibility_enabled)
     conn->noise_handshake_enabled = true;
 
     conn->cookie_request_number = random_u64(c->rng);
@@ -4219,7 +4238,7 @@ void load_secret_key(Net_Crypto *c, const uint8_t *sk)
  * Sets all the global connection variables to their default values.
  */
 Net_Crypto *new_net_crypto(const Logger *log, const Memory *mem, const Random *rng, const Network *ns,
-                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info)
+                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, const bool noise_compatibility_enabled)
 {
     if (dht == nullptr) {
         return nullptr;
@@ -4246,6 +4265,9 @@ Net_Crypto *new_net_crypto(const Logger *log, const Memory *mem, const Random *r
 
     set_packet_tcp_connection_callback(temp->tcp_c, &tcp_data_callback, temp);
     set_oob_packet_tcp_connection_callback(temp->tcp_c, &tcp_oob_callback, temp);
+
+    /* Sets backwards compatibility to non-Noise handshake to true or false */
+    temp->noise_compatibility_enabled = noise_compatibility_enabled;
 
     if (create_recursive_mutex(&temp->tcp_mutex) != 0 ||
             pthread_mutex_init(&temp->connections_mutex, nullptr) != 0) {
