@@ -664,6 +664,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
 non_null(1, 2) nullable(3, 5)
 int noise_handshake_init
 (Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
+//TODO: remove
 // int noise_handshake_init
 // (const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
 /**

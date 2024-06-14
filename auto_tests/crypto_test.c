@@ -631,7 +631,7 @@ static void test_noiseik(void)
 
     // INITIATOR: END Create handshake packet for responder
 
-    // RESPONDER: Consume handshake packet from initiator
+    /* RESPONDER: Consume handshake packet from initiator */
     Noise_Handshake *noise_handshake_responder = (Noise_Handshake *) calloc(1, sizeof(Noise_Handshake));
 
     /* Troubleshooting info, intermediary values */
@@ -674,7 +674,7 @@ static void test_noiseik(void)
                                        sizeof(ciphertext2), noise_handshake_temp_key_resp,
                                        noise_handshake_responder->hash);
 
-    // RESPONDER: Create handshake packet for initiator
+    /* RESPONDER: Create handshake packet for initiator */
 
     /* set ephemeral private+public */
     memcpy(noise_handshake_responder->ephemeral_private, resp_ephemeral, CRYPTO_SECRET_KEY_SIZE);
@@ -713,9 +713,9 @@ static void test_noiseik(void)
     // bin2hex_toupper(ciphertext3_print, sizeof(ciphertext3_print), ciphertext3_hs_responder, sizeof(ciphertext3_hs_responder));
     // printf("Responder: HS ciphertext payload: %s\n", ciphertext3_print);
 
-    // RESPONDER: END create handshake packet for initiator#
+    /* RESPONDER: END create handshake packet for initiator */
 
-    // INITIATOR: Consume handshake packet from responder
+    /* INITIATOR: Consume handshake packet from responder */
     memcpy(noise_handshake_initiator->remote_ephemeral, noise_handshake_responder->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
     noise_mix_hash(noise_handshake_initiator->hash, noise_handshake_initiator->remote_ephemeral, CRYPTO_PUBLIC_KEY_SIZE);
 

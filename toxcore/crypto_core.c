@@ -535,7 +535,7 @@ int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
-    // Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium
+    /* Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium */
     if (plain_length == 0 || shared_key == nullptr || nonce == nullptr || plain == nullptr || encrypted == nullptr) {
         return -1;
     }
@@ -557,7 +557,7 @@ int32_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
                                     const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
                                     const uint8_t *ad, size_t ad_length)
 {
-    // Additional data ad can be a NULL pointer with ad_length equal to 0;  plain_length is calculated by libsodium
+    /* Additional data ad can be a NULL pointer with ad_length equal to 0;  plain_length is calculated by libsodium */ 
     if (encrypted_length <= CRYPTO_MAC_SIZE || shared_key == nullptr || nonce == nullptr || encrypted == nullptr
             || plain == nullptr) {
         return -1;
@@ -580,7 +580,7 @@ int32_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
-    // Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium
+    /* Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium */
     if (plain_length == 0 || shared_key == nullptr || nonce == nullptr || plain == nullptr || encrypted == nullptr) {
         return -1;
     }
@@ -588,7 +588,7 @@ int32_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
     /* Passing NULL instead, encrypted length is clear anwyay (plain_length + crypto_aead_xchacha20poly1305_ietf_ABYTES)  */
     // unsigned long long encrypted_length = 0;
 
-    // nsec is not used by this particular construction and should always be NULL.
+    /* nsec is not used by this particular construction and should always be NULL. */
     if (crypto_aead_xchacha20poly1305_ietf_encrypt(encrypted, NULL, plain, plain_length,
             ad, ad_length, nullptr, nonce, shared_key) != 0) {
         return -1;
@@ -602,7 +602,7 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
                                     const uint8_t *encrypted, size_t encrypted_length, uint8_t *plain,
                                     const uint8_t *ad, size_t ad_length)
 {
-    // Additional data ad can be a NULL pointer with ad_length equal to 0;  plain_length is calculated by libsodium
+    /* Additional data ad can be a NULL pointer with ad_length equal to 0;  plain_length is calculated by libsodium */
     if (encrypted_length <= CRYPTO_MAC_SIZE || shared_key == nullptr || nonce == nullptr || encrypted == nullptr
             || plain == nullptr) {
         return -1;
@@ -632,7 +632,7 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
 // }
 
 // #define NOISE_PROTOCOL_NAME "Noise_IK_25519_ChaChaPoly_SHA512"
-/* Actually only 32 bytes necessary, but test vectors still verify with 33 bytes */
+/* Actually only 32 bytes necessary (but terminator necessary for CI), but test vectors still verify with 33 bytes */
 static const uint8_t noise_protocol[33] = "Noise_IK_25519_ChaChaPoly_SHA512";
 
 /**
