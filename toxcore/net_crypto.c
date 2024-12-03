@@ -5,6 +5,12 @@
 
 /**
  * Functions for the core network crypto.
+ * This implements NoiseIK:
+ * 
+ * <- s 
+ * ... 
+ * -> e, es, s, ss 
+ * <- e, ee, se
  *
  * NOTE: This code has to be perfect. We don't mess around with encryption.
  */
@@ -237,6 +243,9 @@ static int create_cookie_request(const Net_Crypto *c, uint8_t *packet, const uin
 {
     //TODO: remove
     LOGGER_DEBUG(c->log, "ENTERING");
+    
+    //TODO: adapt for new Noise-cookie mechanism _only_
+    //TODO: or different cookie mechanism? E.g. as in WireGuard?
     uint8_t plain[COOKIE_REQUEST_PLAIN_LENGTH];
 
     memcpy(plain, c->self_public_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -593,6 +602,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             memcpy(cookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
             memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
 
+            //TODO: Send/Receive cookies again outside of handshake payload encryption? Double encrypted otherwise
             /* OtherCookie is added to payload */
             if (create_cookie(c->rng, c->mono_time, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH,
                               cookie_plain, c->secret_symmetric_key) != 0) {
@@ -827,10 +837,12 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
 
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
+            //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
             if (open_cookie(c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
                 return false;
             }
 
+            /* Compares static identity public keys from the peer */
             if (expected_real_pk != nullptr && !pk_equal(cookie_plain, expected_real_pk)) {
                 return false;
             }
@@ -907,10 +919,12 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
 
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
+            //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
             if (open_cookie(c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
                 return false;
             }
 
+            /* Compares static identity public keys from the peer */
             if (expected_real_pk != nullptr && !pk_equal(cookie_plain, expected_real_pk)) {
                 return false;
             }
@@ -944,6 +958,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             return false;
         }
 
+        /* Compares static identity public keys from the peer */
         if (expected_real_pk != nullptr && !pk_equal(cookie_plain, expected_real_pk)) {
             return false;
         }
@@ -3028,7 +3043,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->rtt_time = DEFAULT_PING_CONNECTION;
     memcpy(conn->dht_public_key, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
-    /* Necessary for backwards compatibility to non-Noise handshake (if enabled with option noise_compatibility_enabled) */
+    /* Necessary for backwards compatibility to switch to non-Noise handshake (only if enabled with option noise_compatibility_enabled) */
     conn->noise_handshake_enabled = true;
 
     conn->cookie_request_number = random_u64(c->rng);
