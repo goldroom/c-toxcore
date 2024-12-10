@@ -666,7 +666,7 @@ void crypto_hmac512(uint8_t *auth, const uint8_t key[CRYPTO_SHA512_SIZE], const 
  * key is CRYPTO_BLAKE2b_HASH_SIZE bytes because this function is only called via crypto_hkdf() where the key (ck, temp_key)
  * is always HASHLEN bytes.
  */
-void crypto_hmac_blake2b512(uint8_t *out, const uint8_t *in, size_t in_length, const uint8_t *key,
+static void crypto_hmac_blake2b512(uint8_t *out, const uint8_t *in, size_t in_length, const uint8_t *key,
                     size_t key_length)
 {
     crypto_generichash_blake2b_state state;
