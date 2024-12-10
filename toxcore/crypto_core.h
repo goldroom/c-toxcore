@@ -82,6 +82,16 @@ extern "C" {
  */
 #define CRYPTO_SHA512_SIZE             64
 
+/**
+ * @brief The number of bytes in a BLAKE2b hash.
+ */
+#define CRYPTO_BLAKE2b_HASH_SIZE             64
+
+/**
+ * @brief The number of bytes in a BLAKE2b block.
+ */
+#define CRYPTO_BLAKE2b_BLOCK_SIZE             128
+
 /** @brief Fill a byte array with random bytes.
  *
  * This is the key generator callback and as such must be a cryptographically
@@ -126,6 +136,8 @@ typedef struct Noise_Handshake {
     uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
+    //TODO(goldroom): precompute static static? cf. WireGuard struct noise_handshake
+    // uint8_t precomputed_static_static[CRYPTO_PUBLIC_KEY_SIZE];
 
     uint8_t hash[CRYPTO_SHA512_SIZE];
     uint8_t chaining_key[CRYPTO_SHA512_SIZE];
@@ -601,7 +613,7 @@ int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
  * @param key Secret key
  */
 non_null(1, 2) nullable(3)
-void crypto_hmac512(uint8_t auth[CRYPTO_SHA512_SIZE], const uint8_t key[CRYPTO_SHA512_SIZE], const uint8_t *data,
+void crypto_hmac512(uint8_t *auth, const uint8_t key[CRYPTO_SHA512_SIZE], const uint8_t *data,
                     size_t data_length);
 
 /**
