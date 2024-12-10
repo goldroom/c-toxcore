@@ -14,7 +14,6 @@
 
 #include "attributes.h"
 #include "ccompat.h"
-#include "tox.h"
 #include "util.h"
 
 static_assert(CRYPTO_PUBLIC_KEY_SIZE == crypto_box_PUBLICKEYBYTES,
