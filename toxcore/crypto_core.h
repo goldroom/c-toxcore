@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "attributes.h"
+#include "mem.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -422,7 +423,8 @@ void crypto_derive_public_key(uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
  * @return length of encrypted data if everything was fine.
  */
 non_null()
-int32_t encrypt_data(const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
+int32_t encrypt_data(const Memory *mem,
+                     const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
                      const uint8_t secret_key[CRYPTO_SECRET_KEY_SIZE],
                      const uint8_t nonce[CRYPTO_NONCE_SIZE],
                      const uint8_t *plain, size_t length, uint8_t *encrypted);
@@ -439,7 +441,8 @@ int32_t encrypt_data(const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
  * @return length of plain text data if everything was fine.
  */
 non_null()
-int32_t decrypt_data(const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
+int32_t decrypt_data(const Memory *mem,
+                     const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
                      const uint8_t secret_key[CRYPTO_SECRET_KEY_SIZE],
                      const uint8_t nonce[CRYPTO_NONCE_SIZE],
                      const uint8_t *encrypted, size_t length, uint8_t *plain);
@@ -467,7 +470,8 @@ int32_t encrypt_precompute(const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
  * @return length of encrypted data if everything was fine.
  */
 non_null()
-int32_t encrypt_data_symmetric(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
+int32_t encrypt_data_symmetric(const Memory *mem,
+                               const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
                                const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                const uint8_t *plain, size_t length, uint8_t *encrypted);
 
@@ -482,7 +486,8 @@ int32_t encrypt_data_symmetric(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
  * @return length of plain data if everything was fine.
  */
 non_null()
-int32_t decrypt_data_symmetric(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
+int32_t decrypt_data_symmetric(const Memory *mem,
+                               const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
                                const uint8_t nonce[CRYPTO_NONCE_SIZE],
                                const uint8_t *encrypted, size_t length, uint8_t *plain);
 

@@ -259,7 +259,7 @@ static int create_cookie_request(const Net_Crypto *c, uint8_t *packet, const uin
     packet[0] = NET_PACKET_COOKIE_REQUEST;
     memcpy(packet + 1, dht_get_self_public_key(c->dht), CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE, nonce, CRYPTO_NONCE_SIZE);
-    const int len = encrypt_data_symmetric(shared_key, nonce, plain, sizeof(plain),
+    const int len = encrypt_data_symmetric(c->mem, shared_key, nonce, plain, sizeof(plain),
                                            packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE);
 
     if (len != COOKIE_REQUEST_PLAIN_LENGTH + CRYPTO_MAC_SIZE) {
@@ -275,7 +275,7 @@ static int create_cookie_request(const Net_Crypto *c, uint8_t *packet, const uin
  * @retval 0 on success.
  */
 non_null()
-static int create_cookie(const Random *rng, const Mono_Time *mono_time, uint8_t *cookie, const uint8_t *bytes,
+static int create_cookie(const Memory *mem, const Random *rng, const Mono_Time *mono_time, uint8_t *cookie, const uint8_t *bytes,
                          const uint8_t *encryption_key)
 {
     uint8_t contents[COOKIE_CONTENTS_LENGTH];
@@ -283,7 +283,7 @@ static int create_cookie(const Random *rng, const Mono_Time *mono_time, uint8_t 
     memcpy(contents, &temp_time, sizeof(temp_time));
     memcpy(contents + sizeof(temp_time), bytes, COOKIE_DATA_LENGTH);
     random_nonce(rng, cookie);
-    const int len = encrypt_data_symmetric(encryption_key, cookie, contents, sizeof(contents), cookie + CRYPTO_NONCE_SIZE);
+    const int len = encrypt_data_symmetric(mem, encryption_key, cookie, contents, sizeof(contents), cookie + CRYPTO_NONCE_SIZE);
 
     if (len != COOKIE_LENGTH - CRYPTO_NONCE_SIZE) {
         return -1;
@@ -298,11 +298,11 @@ static int create_cookie(const Random *rng, const Mono_Time *mono_time, uint8_t 
  * @retval 0 on success.
  */
 non_null()
-static int open_cookie(const Mono_Time *mono_time, uint8_t *bytes, const uint8_t *cookie,
+static int open_cookie(const Memory *mem, const Mono_Time *mono_time, uint8_t *bytes, const uint8_t *cookie,
                        const uint8_t *encryption_key)
 {
     uint8_t contents[COOKIE_CONTENTS_LENGTH];
-    const int len = decrypt_data_symmetric(encryption_key, cookie, cookie + CRYPTO_NONCE_SIZE,
+    const int len = decrypt_data_symmetric(mem, encryption_key, cookie, cookie + CRYPTO_NONCE_SIZE,
                                            COOKIE_LENGTH - CRYPTO_NONCE_SIZE, contents);
 
     if (len != sizeof(contents)) {
@@ -338,14 +338,14 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
     memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
     uint8_t plain[COOKIE_LENGTH + sizeof(uint64_t)];
 
-    if (create_cookie(c->rng, c->mono_time, plain, cookie_plain, c->secret_symmetric_key) != 0) {
+    if (create_cookie(c->mem, c->rng, c->mono_time, plain, cookie_plain, c->secret_symmetric_key) != 0) {
         return -1;
     }
 
     memcpy(plain + COOKIE_LENGTH, request_plain + COOKIE_DATA_LENGTH, sizeof(uint64_t));
     packet[0] = NET_PACKET_COOKIE_RESPONSE;
     random_nonce(c->rng, packet + 1);
-    const int len = encrypt_data_symmetric(shared_key, packet + 1, plain, sizeof(plain), packet + 1 + CRYPTO_NONCE_SIZE);
+    const int len = encrypt_data_symmetric(c->mem, shared_key, packet + 1, plain, sizeof(plain), packet + 1 + CRYPTO_NONCE_SIZE);
 
     if (len != COOKIE_RESPONSE_LENGTH - (1 + CRYPTO_NONCE_SIZE)) {
         return -1;
@@ -373,7 +373,7 @@ static int handle_cookie_request(const Net_Crypto *c, uint8_t *request_plain, ui
     memcpy(dht_public_key, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
     const uint8_t *tmp_shared_key = dht_get_shared_key_sent(c->dht, dht_public_key);
     memcpy(shared_key, tmp_shared_key, CRYPTO_SHARED_KEY_SIZE);
-    const int len = decrypt_data_symmetric(shared_key, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
+    const int len = decrypt_data_symmetric(c->mem, shared_key, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
                                            packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE, COOKIE_REQUEST_PLAIN_LENGTH + CRYPTO_MAC_SIZE,
                                            request_plain);
 
@@ -476,7 +476,7 @@ static int tcp_oob_handle_cookie_request(const Net_Crypto *c, unsigned int tcp_c
  * @retval COOKIE_LENGTH on success.
  */
 non_null()
-static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
+static int handle_cookie_response(const Memory *mem, uint8_t *cookie, uint64_t *number,
                                   const uint8_t *packet, uint16_t length,
                                   const uint8_t *shared_key)
 {
@@ -485,7 +485,7 @@ static int handle_cookie_response(uint8_t *cookie, uint64_t *number,
     }
 
     uint8_t plain[COOKIE_LENGTH + sizeof(uint64_t)];
-    const int len = decrypt_data_symmetric(shared_key, packet + 1, packet + 1 + CRYPTO_NONCE_SIZE,
+    const int len = decrypt_data_symmetric(mem, shared_key, packet + 1, packet + 1 + CRYPTO_NONCE_SIZE,
                                            length - (1 + CRYPTO_NONCE_SIZE), plain);
 
     if (len != sizeof(plain)) {
@@ -706,14 +706,14 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
         memcpy(cookie_plain, peer_real_pk, CRYPTO_PUBLIC_KEY_SIZE);
         memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
 
-        if (create_cookie(c->rng, c->mono_time, plain + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE,
-                          cookie_plain, c->secret_symmetric_key) != 0) {
-            return -1;
-        }
+    if (create_cookie(c->mem, c->rng, c->mono_time, plain + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE,
+                      cookie_plain, c->secret_symmetric_key) != 0) {
+        return -1;
+    }
 
-        random_nonce(c->rng, packet + 1 + COOKIE_LENGTH);
-        const int len = encrypt_data(peer_real_pk, c->self_secret_key, packet + 1 + COOKIE_LENGTH, plain, sizeof(plain),
-                                     packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE);
+    random_nonce(c->rng, packet + 1 + COOKIE_LENGTH);
+    const int len = encrypt_data(c->mem, peer_real_pk, c->self_secret_key, packet + 1 + COOKIE_LENGTH, plain, sizeof(plain),
+                                 packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE);
 
         if (len != HANDSHAKE_PACKET_LENGTH - (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE)) {
             return -1;
@@ -954,9 +954,9 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
 
         uint8_t cookie_plain[COOKIE_DATA_LENGTH];
 
-        if (open_cookie(c->mono_time, cookie_plain, packet + 1, c->secret_symmetric_key) != 0) {
-            return false;
-        }
+    if (open_cookie(c->mem, c->mono_time, cookie_plain, packet + 1, c->secret_symmetric_key) != 0) {
+        return false;
+    }
 
         /* Compares static identity public keys from the peer */
         if (expected_real_pk != nullptr && !pk_equal(cookie_plain, expected_real_pk)) {
@@ -966,10 +966,10 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
         uint8_t cookie_hash[CRYPTO_SHA512_SIZE];
         crypto_sha512(cookie_hash, packet + 1, COOKIE_LENGTH);
 
-        uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
-        const int len = decrypt_data(cookie_plain, c->self_secret_key, packet + 1 + COOKIE_LENGTH,
-                                     packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE,
-                                     HANDSHAKE_PACKET_LENGTH - (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE), plain);
+    uint8_t plain[CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE + COOKIE_LENGTH];
+    const int len = decrypt_data(c->mem, cookie_plain, c->self_secret_key, packet + 1 + COOKIE_LENGTH,
+                                 packet + 1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE,
+                                 HANDSHAKE_PACKET_LENGTH - (1 + COOKIE_LENGTH + CRYPTO_NONCE_SIZE), plain);
 
         if (len != sizeof(plain)) {
             return false;
@@ -1539,7 +1539,7 @@ static int send_data_packet(Net_Crypto *c, int crypt_connection_id, const uint8_
         //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
         len = encrypt_data_symmetric_xaead(conn->send_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
     } else { /* Case non-Noise handshake */
-        len = encrypt_data_symmetric(conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
+        len = encrypt_data_symmetric(c->mem, conn->shared_key, conn->sent_nonce, data, length, packet + 1 + sizeof(uint16_t));
     }
     
 
@@ -1731,7 +1731,7 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
         len = decrypt_data_symmetric_xaead(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t), length - (1 + sizeof(uint16_t)), data,
                     nullptr, 0);
     } else { /* case non-Noise handshake */
-        len = decrypt_data_symmetric(conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
+        len = decrypt_data_symmetric(c->mem, conn->shared_key, nonce, packet + 1 + sizeof(uint16_t),
                                            length - (1 + sizeof(uint16_t)), data);
     }
 
@@ -2230,7 +2230,7 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
     uint8_t cookie[COOKIE_LENGTH];
     uint64_t number;
 
-    if (handle_cookie_response(cookie, &number, packet, length, conn->shared_key) != sizeof(cookie)) {
+    if (handle_cookie_response(c->mem, cookie, &number, packet, length, conn->shared_key) != sizeof(cookie)) {
         return -1;
     }
 

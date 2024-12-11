@@ -274,7 +274,7 @@ uint32_t tox_max_status_message_length(void);
  *
  * @deprecated The macro will be removed in 0.3.0. Use the function instead.
  */
-#define TOX_MAX_FRIEND_REQUEST_LENGTH  1016
+#define TOX_MAX_FRIEND_REQUEST_LENGTH  921
 
 uint32_t tox_max_friend_request_length(void);
 
@@ -670,7 +670,7 @@ struct Tox_Options {
     bool experimental_groups_persistence;
 
     /**
-     * Compatibility for old non-Noise handshake.
+     * @brief Compatibility for old non-Noise handshake.
      *
      * If this is set to false, non-Noise handshake
      * will not work anymore.
@@ -678,6 +678,24 @@ struct Tox_Options {
      * Default: true.
      */
     bool noise_compatibility_enabled;
+
+    /**
+     * @brief Disable DNS hostname resolution.
+     *
+     * Hostnames or IP addresses are passed to the bootstrap/add_tcp_relay
+     * function and proxy host options. If disabled (this flag is true), only
+     * IP addresses are allowed.
+     *
+     * If this is set to true, the library will not attempt to resolve
+     * hostnames. This is useful for clients that want to resolve hostnames
+     * themselves and pass the resolved IP addresses to the library (e.g. in
+     * case it wants to use Tor).
+     * Passing hostnames will result in a TOX_ERR_BOOTSTRAP_BAD_HOST error if
+     * this is set to true.
+     *
+     * Default: false. May become true in the future (0.3.0).
+     */
+    bool experimental_disable_dns;
 };
 
 bool tox_options_get_ipv6_enabled(const Tox_Options *options);
@@ -755,6 +773,10 @@ void tox_options_set_experimental_groups_persistence(Tox_Options *options, bool 
 bool tox_options_get_noise_compatibility_enabled(const struct Tox_Options *options);
 
 void tox_options_set_noise_compatibility_enabled(struct Tox_Options *options, bool noise_compatibility_enabled);
+
+bool tox_options_get_experimental_disable_dns(const Tox_Options *options);
+
+void tox_options_set_experimental_disable_dns(Tox_Options *options, bool experimental_disable_dns);
 
 /**
  * @brief Initialises a Tox_Options object with the default options.
