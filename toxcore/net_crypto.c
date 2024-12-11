@@ -604,7 +604,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
             //TODO: Send/Receive cookies again outside of handshake payload encryption? Double encrypted otherwise
             /* OtherCookie is added to payload */
-            if (create_cookie(c->rng, c->mono_time, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH,
+            if (create_cookie(c->mem, c->rng, c->mono_time, handshake_payload_plain + CRYPTO_NONCE_SIZE + COOKIE_LENGTH,
                               cookie_plain, c->secret_symmetric_key) != 0) {
                 return -1;
             }
@@ -838,7 +838,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
             //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
-            if (open_cookie(c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
+            if (open_cookie(c->mem, c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
                 return false;
             }
 
@@ -920,7 +920,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
             //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
-            if (open_cookie(c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
+            if (open_cookie(c->mem, c->mono_time, cookie_plain, handshake_payload_plain + CRYPTO_NONCE_SIZE, c->secret_symmetric_key) != 0) {
                 return false;
             }
 
