@@ -971,6 +971,9 @@ static void test_noiseik(void)
     // char ciphertext5_transport1_responder_print[sizeof(ciphertext5_transport1_responder) * 2 + 1];
     // bin2hex_toupper(ciphertext5_transport1_responder_print, sizeof(ciphertext5_transport1_responder_print), ciphertext5_transport1_responder, sizeof(ciphertext5_transport1_responder));
     // printf("Responder: Transport1 ciphertext: (length: %d) %s\n", length_ciphertext5_transport1_responder, ciphertext5_transport1_responder_print);
+
+    free(noise_handshake_initiator);
+    free(noise_handshake_responder);
 }
 
 int main(void)
