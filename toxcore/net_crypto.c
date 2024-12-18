@@ -232,7 +232,8 @@ static bool crypt_connection_id_is_valid(const Net_Crypto *c, int crypt_connecti
 #define COOKIE_RESPONSE_LENGTH (uint16_t)(1 + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + sizeof(uint64_t) + CRYPTO_MAC_SIZE)
 
 static const uint8_t noise_mac1_key_label[CRYPTO_COOKIE_LABEL_SIZE] = "mac1----";
-static const uint8_t noise_cookie_key_label[CRYPTO_COOKIE_LABEL_SIZE] = "cookie--";
+//TODO: uncomment when used (currently commented for CI)
+// static const uint8_t noise_cookie_key_label[CRYPTO_COOKIE_LABEL_SIZE] = "cookie--";
 
 /** @brief Create a cookie request packet and put it in packet.
  *
