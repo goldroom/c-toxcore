@@ -543,8 +543,8 @@ int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
                                     const uint8_t *plain, size_t plain_length, uint8_t *encrypted,
                                     const uint8_t *ad, size_t ad_length)
 {
-    /* Additional data ad can be a NULL pointer with ad_length equal to 0; encrypted_length is calculated by libsodium */
-    if (plain_length == 0 || shared_key == nullptr || nonce == nullptr || plain == nullptr || encrypted == nullptr) {
+    /* Plaintext+additional data ad can be a NULL pointer with plain_length/ad_length equal to 0; encrypted_length is calculated by libsodium */
+    if (shared_key == nullptr || nonce == nullptr || encrypted == nullptr) {
         return -1;
     }
 
@@ -898,7 +898,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
     /* ctx parameter = RFC5869 info -> i.e. optional context and application specific information (can be a zero-length string) */
 
     /* Expand second key: key = secret, data = first-key || 0x2 */
-    output[CRYPTO_SHA512_SIZE] = 2;
+    output[CRYPTO_BLAKE2b_HASH_SIZE] = 2;
     crypto_hmac_blake2b_512(output, output, CRYPTO_BLAKE2b_HASH_SIZE +1, temp_key, CRYPTO_BLAKE2b_HASH_SIZE);
     memcpy(output2, output, second_len);
 
@@ -909,8 +909,8 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
     // memcpy(output3, output, third_len);
 
     /* Clear sensitive data from stack */
-    crypto_memzero(temp_key, CRYPTO_SHA512_SIZE);
-    crypto_memzero(output, CRYPTO_SHA512_SIZE + 1);
+    crypto_memzero(temp_key, CRYPTO_BLAKE2b_HASH_SIZE);
+    crypto_memzero(output, CRYPTO_BLAKE2b_HASH_SIZE + 1);
 }
 
 /*
@@ -1023,14 +1023,14 @@ void noise_mix_hash(uint8_t hash[CRYPTO_BLAKE2b_HASH_SIZE], const uint8_t *data,
  */
 void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
                             size_t plain_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                            uint8_t hash[CRYPTO_SHA512_SIZE])
+                            uint8_t hash[CRYPTO_BLAKE2b_HASH_SIZE])
 {
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISEIK_NONCE_SIZE);
 
     int32_t encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           plaintext, plain_length, ciphertext,
-                                          hash, CRYPTO_SHA512_SIZE);
+                                          hash, CRYPTO_BLAKE2b_HASH_SIZE);
 
     noise_mix_hash(hash, ciphertext, encrypted_length);
 }
@@ -1042,14 +1042,14 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
  */
 int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
                            size_t encrypted_length, uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE],
-                           uint8_t hash[CRYPTO_SHA512_SIZE])
+                           uint8_t hash[CRYPTO_BLAKE2b_HASH_SIZE])
 {
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISEIK_NONCE_SIZE);
 
     int32_t plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           ciphertext, encrypted_length, plaintext,
-                                          hash, CRYPTO_SHA512_SIZE);
+                                          hash, CRYPTO_BLAKE2b_HASH_SIZE);
 
     noise_mix_hash(hash, ciphertext, encrypted_length);
 
@@ -1090,11 +1090,11 @@ int noise_handshake_init
 
     /* IntializeSymmetric(protocol_name) => set h to NOISE_PROTOCOL_NAME and append zero bytes to make 64 bytes, sets ck = h
      Nothing gets hashed in Tox case because NOISE_PROTOCOL_NAME < CRYPTO_SHA512_SIZE */
-    uint8_t temp_hash[CRYPTO_SHA512_SIZE];
-    memset(temp_hash, 0, CRYPTO_SHA512_SIZE);
+    uint8_t temp_hash[CRYPTO_BLAKE2b_HASH_SIZE];
+    memset(temp_hash, 0, CRYPTO_BLAKE2b_HASH_SIZE);
     memcpy(temp_hash, noise_protocol, sizeof(noise_protocol));
-    memcpy(noise_handshake->hash, temp_hash, CRYPTO_SHA512_SIZE);
-    memcpy(noise_handshake->chaining_key, temp_hash, CRYPTO_SHA512_SIZE);
+    memcpy(noise_handshake->hash, temp_hash, CRYPTO_BLAKE2b_HASH_SIZE);
+    memcpy(noise_handshake->chaining_key, temp_hash, CRYPTO_BLAKE2b_HASH_SIZE);
 
     /* IMPORTANT needs to be called with (empty/zero-length) prologue! */ 
     noise_mix_hash(noise_handshake->hash, prologue, prologue_length);
