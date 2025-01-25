@@ -100,9 +100,8 @@ extern "C" {
 
 /**
  * @brief The number of bytes in a cookie label.
- * Actually only 8 bytes necessary (but terminator necessary for CI)
  */
-#define CRYPTO_COOKIE_LABEL_SIZE             9
+#define CRYPTO_COOKIE_LABEL_SIZE             8
 
 // #define NOISE_MAC1_KEY_LABEL        "mac1----"
 // #define NOISE_COOKIE_KEY_LABEL      "cookie--"
@@ -622,10 +621,6 @@ non_null()
 void precompute_mac_key(uint8_t out_mac_key[CRYPTO_SYMMETRIC_KEY_SIZE],
 			   const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
 			   const uint8_t label[CRYPTO_COOKIE_LABEL_SIZE]);
-
-//TODO: Mac(key, input) Keyed-Blake2b(key, input, 16), the keyed MAC variant of the BLAKE2b hash function, returning 16 bytes of output.
-non_null()
-void crypto_mac_blake2b_128(uint8_t *out_mac, const uint8_t *key, size_t key_length, const uint8_t *in, size_t in_length);
 
 /**
  * @brief Compute an HMAC-SHA512 authenticator (64 bytes).

@@ -660,7 +660,6 @@ void precompute_mac_key(uint8_t out_mac_key[CRYPTO_SYMMETRIC_KEY_SIZE],
 }
 
 //TODO: Mac(key, input) Keyed-Blake2b(key, input, 16), the keyed MAC variant of the BLAKE2b hash function, returning 16 bytes of output.
-//TODO: static?
 void crypto_mac_blake2b_128(uint8_t *out_mac, const uint8_t *key, size_t key_length, const uint8_t *in, size_t in_length) {
     crypto_generichash(out_mac, CRYPTO_BLAKE2b_MAC_SIZE, in, in_length, key, key_length);
 }
