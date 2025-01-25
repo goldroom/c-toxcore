@@ -84,7 +84,7 @@ extern "C" {
 #define CRYPTO_SHA512_SIZE             64
 
 /**
- * @brief The number of bytes in a BLAKE2b hash.
+ * @brief The number of bytes in a BLAKE2b-512 hash.
  */
 #define CRYPTO_BLAKE2b_HASH_SIZE             64
 

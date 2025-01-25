@@ -134,6 +134,7 @@ typedef struct New_Connection {
     uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     // Necessary for Noise
+    //TODO: refactor to not use struct
     Noise_Handshake noise_handshake_data;
     Noise_Handshake *noise_handshake;
     //TODO: if no struct necessary
