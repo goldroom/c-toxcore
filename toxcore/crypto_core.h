@@ -84,12 +84,7 @@ extern "C" {
 #define CRYPTO_SHA512_SIZE             64
 
 /**
- * @brief The number of bytes in a BLAKE2b-128 MAC.
- */
-#define CRYPTO_BLAKE2b_MAC_SIZE             16
-
-/**
- * @brief The number of bytes in a BLAKE2b-512 hash.
+ * @brief The number of bytes in a BLAKE2b hash.
  */
 #define CRYPTO_BLAKE2b_HASH_SIZE             64
 
@@ -97,14 +92,6 @@ extern "C" {
  * @brief The number of bytes in a BLAKE2b block.
  */
 #define CRYPTO_BLAKE2b_BLOCK_SIZE             128
-
-/**
- * @brief The number of bytes in a cookie label.
- */
-#define CRYPTO_COOKIE_LABEL_SIZE             8
-
-// #define NOISE_MAC1_KEY_LABEL        "mac1----"
-// #define NOISE_COOKIE_KEY_LABEL      "cookie--"
 
 /** @brief Fill a byte array with random bytes.
  *
@@ -614,13 +601,6 @@ int32_t encrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_
 non_null(1, 2, 3, 5) nullable(6)
 int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
-
-//TODO: comment
-/* MAC key as input for crypto_mac_blake2b_128() */ 
-non_null()
-void precompute_mac_key(uint8_t out_mac_key[CRYPTO_SYMMETRIC_KEY_SIZE],
-			   const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
-			   const uint8_t label[CRYPTO_COOKIE_LABEL_SIZE]);
 
 /**
  * @brief Compute an HMAC-SHA512 authenticator (64 bytes).
