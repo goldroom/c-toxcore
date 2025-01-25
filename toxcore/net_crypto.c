@@ -3877,7 +3877,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     // uint8_t 
     // noise_create_cookie()
 
-    //FIXME: Corrent IP_Port of peer not known at this point (but necessary for initiator-cookie)
+    //FIXME: Current IP_Port of peer not known at this point (but necessary for initiator-cookie)
     if (create_send_handshake(c, crypt_connection_id, nullptr, conn->peer_dht_public_key) != 0) {
         kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
         wipe_crypto_connection(c, crypt_connection_id);
