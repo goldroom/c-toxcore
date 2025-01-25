@@ -237,13 +237,6 @@ static bool crypt_connection_id_is_valid(const Net_Crypto *c, int crypt_connecti
 #define COOKIE_RESPONSE_LENGTH (uint16_t)(1 + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + sizeof(uint64_t) + CRYPTO_MAC_SIZE)
 #define NOISE_COOKIE_RESPONSE_LENGTH (uint16_t)(1 + CRYPTO_NONCE_SIZE + NOISE_COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 
-
-/* Noise: Necessary for Noise-based handshake (Noise cookie phase + Noise_IK_25519_ChaChaPoly_BLAKE2b) */
-#define NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH + NOISE_MAC2_LENGTH)
-#define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH + NOISE_MAC2_LENGTH)
-#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR (CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8)
-#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER 0
-
 static const uint8_t noise_mac1_key_label[CRYPTO_COOKIE_LABEL_SIZE] = "mac1----";
 //TODO: uncomment when used (currently commented for CI)
 static const uint8_t noise_cookie_key_label[CRYPTO_COOKIE_LABEL_SIZE] = "cookie--";
@@ -314,8 +307,7 @@ static int create_cookie(const Memory *mem, const Random *rng, const Mono_Time *
     return 0;
 }
 
-/** TODO: adapt for Noise 
- * @brief Create cookie of length COOKIE_LENGTH from bytes of length COOKIE_DATA_LENGTH using encryption_key
+/** @brief Create cookie of length COOKIE_LENGTH from bytes of length COOKIE_DATA_LENGTH using encryption_key
  *
  * @param cookie must be NOISE_COOKIE_LENGTH bytes.
  * @param cookie_symmetric_key must be of size CRYPTO_SYMMETRIC_KEY_SIZE or bigger. Symmetric encryption key for τ := Mac(Rm, Am')
@@ -398,90 +390,6 @@ static int create_cookie_response(const Net_Crypto *c, uint8_t *packet, const ui
     return COOKIE_RESPONSE_LENGTH;
 }
 
-/*
-* TODO: Helper function to print hashes, keys, packets, etc.
-* TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
-* bytes_to_string() from util.h
-*/
-static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length, const Logger *log)
-{
-    bytes_to_string(bytes, bytes_length, string, string_length);
-}
-
-//TODO: document
-static bool noise_verify_mac1_mac2(const uint8_t *handshake_packet, size_t handshake_packet_length, const Net_Crypto *c, const IP_Port *source, bool verify_mac2) {
-    LOGGER_DEBUG(c->log, "ENTERING");
-    if (handshake_packet_length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
-        LOGGER_DEBUG(c->log, "NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
-        /* Verify MAC1 */
-        uint8_t packet_mac1_data[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
-        memcpy(packet_mac1_data, handshake_packet + 1, sizeof(packet_mac1_data));
-        uint8_t mac1_verify[NOISE_MAC1_LENGTH];
-        crypto_mac_blake2b_128(mac1_verify, c->mac1_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1_data, sizeof(packet_mac1_data));
-
-        if (memcmp(handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE, 
-                mac1_verify, NOISE_MAC1_LENGTH) != 0) {
-            return false;
-        }
-        LOGGER_DEBUG(c->log, "Responder: Initiator MAC1 verified");
-
-        if (verify_mac2 == true) {
-            //TODO: remove from production code
-            char log_handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR*2+1];
-            bytes2string(log_handshake_packet, sizeof(log_handshake_packet), handshake_packet, NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR, c->log);
-            LOGGER_DEBUG(c->log, "Responder: INITIATOR handshake packet: %s", log_handshake_packet);
-            /* Verify MAC2 */
-            uint8_t mac2_verify[NOISE_MAC2_LENGTH];
-            uint8_t packet_mac2_data[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - NOISE_MAC2_LENGTH];
-            memcpy(packet_mac2_data, handshake_packet + 1, sizeof(packet_mac2_data));
-            //TODO: Other way to get cookie here?
-            uint8_t self_cookie[NOISE_COOKIE_LENGTH];
-            noise_create_cookie(self_cookie, c->cookie_symmetric_key, source);
-            crypto_mac_blake2b_128(mac2_verify, self_cookie, NOISE_COOKIE_LENGTH, packet_mac2_data, sizeof(packet_mac2_data));
-
-            if (memcmp(handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH,
-                    mac2_verify, NOISE_MAC2_LENGTH) != 0) {
-                return false;
-            }
-            LOGGER_DEBUG(c->log, "Responder: Initiator MAC2 verified");
-        } else {
-            return true;
-        }
-    }
-    else if (handshake_packet_length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
-        LOGGER_DEBUG(c->log, "NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
-        /* Verify MAC1 */
-        uint8_t packet_mac1_data[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
-        memcpy(packet_mac1_data, handshake_packet + 1, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
-        uint8_t mac1_verify[NOISE_MAC1_LENGTH];
-        crypto_mac_blake2b_128(mac1_verify, c->mac1_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1_data, sizeof(packet_mac1_data));
-
-        if (memcmp(handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE,
-                mac1_verify, NOISE_MAC1_LENGTH) != 0) {
-            return false;
-        }
-        LOGGER_DEBUG(c->log, "Initiator: Responder MAC1 verified");
-
-        if (verify_mac2 == true) {
-            /* Verify MAC2 */
-            uint8_t mac2_verify[NOISE_MAC2_LENGTH];
-            uint8_t packet_mac2_data[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC2_LENGTH];
-            memcpy(packet_mac2_data, handshake_packet + 1, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC2_LENGTH));
-            uint8_t self_cookie[NOISE_COOKIE_LENGTH];
-            noise_create_cookie(self_cookie, c->cookie_symmetric_key, source);
-            crypto_mac_blake2b_128(mac2_verify, self_cookie, NOISE_COOKIE_LENGTH, packet_mac2_data, sizeof(packet_mac2_data));
-
-            if (memcmp(handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH,
-                    mac2_verify, NOISE_MAC2_LENGTH) != 0) {
-                return false;
-            }
-            LOGGER_DEBUG(c->log, "Initiator: Responder MAC2 verified");
-        } else {
-            return true;
-        }
-    }
-}
-
 /** @brief Create a cookie response packet and put it in packet.
  * 
  * @param packet must be of size NOISE_COOKIE_RESPONSE_LENGTH.
@@ -492,36 +400,22 @@ static bool noise_verify_mac1_mac2(const uint8_t *handshake_packet, size_t hands
  * @retval NOISE_COOKIE_RESPONSE_LENGTH on success.
  */
 non_null()
-static int noise_create_cookie_response(const Net_Crypto *c, uint8_t noise_cookie_response_packet[NOISE_COOKIE_RESPONSE_LENGTH], const IP_Port *source, 
-                                  const uint8_t noise_cookie_request_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR])
+static int noise_create_cookie_response(const Net_Crypto *c, uint8_t packet[NOISE_COOKIE_RESPONSE_LENGTH], const IP_Port *source, 
+                                  const uint8_t noise_mac1_received[NOISE_MAC1_LENGTH])
 {
     LOGGER_DEBUG(c->log, "ENTERING");
     // symmetric_cookie_encryption_key based on label + DHT public key
-
-    /* Verify handshake packet MAC1 (of the INITIATOR peer) */
-    // uint8_t noise_mac1[NOISE_MAC1_LENGTH];
-    // crypto_mac_blake2b_128(noise_mac1, c->mac1_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
-
-    // if (memcmp(noise_cookie_response_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE,
-    //         packet_mac1, NOISE_MAC1_LENGTH) != 0) {            
-    //     return -1;
-    // }
-    if (noise_verify_mac1_mac2(noise_cookie_request_packet, NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR, c, nullptr, false) != true) {
-        return -1;
-    }
-    LOGGER_DEBUG(c->log, "after noise_verify_mac1_mac2()");
-
+    // handshake packet mac1 value (of the peer)
     uint8_t noise_cookie[NOISE_COOKIE_LENGTH];
 
     noise_create_cookie(noise_cookie, c->cookie_symmetric_key, source);
 
-    noise_cookie_response_packet[0] = NET_PACKET_COOKIE_RESPONSE;
+    packet[0] = NET_PACKET_COOKIE_RESPONSE;
     // random nonce
-    random_nonce(c->rng, noise_cookie_response_packet + 1);
+    random_nonce(c->rng, packet + 1);
     // calculate msg.cookie := Xaead(Hash(Label-Cookie ‖ Spub  m ), msg.nonce, τ, M )
-    //TODO: AD ignores packet kind (otherwise not possible with NET_PACKET_COOKIE_REQUEST change to NET_PACKET_CRYPTO_HANDSHAKE) => problem/vulnerability?
-    const int len = encrypt_data_symmetric_xaead(c->cookie_xaead_symmetric_key, noise_cookie_response_packet + 1, noise_cookie, 
-            NOISE_COOKIE_LENGTH, noise_cookie_response_packet + 1 + CRYPTO_NONCE_SIZE, noise_cookie_request_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE, NOISE_MAC1_LENGTH);
+    const int len = encrypt_data_symmetric_xaead(c->cookie_xaead_symmetric_key, packet + 1, noise_cookie, 
+            NOISE_COOKIE_LENGTH, packet + 1 + CRYPTO_NONCE_SIZE, noise_mac1_received, NOISE_MAC1_LENGTH);
 
     if (len != (NOISE_COOKIE_LENGTH + CRYPTO_MAC_SIZE)) {
         return -1;
@@ -561,24 +455,30 @@ static int handle_cookie_request(const Net_Crypto *c, uint8_t *request_plain, ui
 }
 
 /** Handle the cookie request packet (for raw UDP) */
-//TODO: Only handles NoiseIK cookie requests (i.e. handshake packet with invalid MAC2)
-non_null(1, 2, 3)
-static int noise_udp_handle_cookie_request(void *object, const IP_Port *source, const uint8_t *packet, uint16_t length, void *userdata)
+non_null(1, 2, 3) nullable(5)
+static int udp_handle_cookie_request(void *object, const IP_Port *source, const uint8_t *packet, uint16_t length,
+                                     void *userdata)
 {
-    if (length != NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
-        return 1;
-    }
     const Net_Crypto *c = (const Net_Crypto *)object;
 
     //TODO: remove
     LOGGER_DEBUG(c->log, "ENTERING");
 
-    uint8_t noise_data_cookie_response[NOISE_COOKIE_RESPONSE_LENGTH];
-    if (noise_create_cookie_response(c, noise_data_cookie_response, source, packet) != sizeof(noise_data_cookie_response)) {
+    uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
+    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
+    uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE];
+
+    if (handle_cookie_request(c, request_plain, shared_key, dht_public_key, packet, length) != 0) {
         return 1;
     }
 
-    if ((uint32_t)sendpacket(dht_get_net(c->dht), source, noise_data_cookie_response, sizeof(noise_data_cookie_response)) != sizeof(noise_data_cookie_response)) {
+    uint8_t data[COOKIE_RESPONSE_LENGTH];
+
+    if (create_cookie_response(c, data, request_plain, shared_key, dht_public_key) != sizeof(data)) {
+        return 1;
+    }
+
+    if ((uint32_t)sendpacket(dht_get_net(c->dht), source, data, sizeof(data)) != sizeof(data)) {
         return 1;
     }
 
@@ -591,14 +491,21 @@ static int tcp_handle_cookie_request(const Net_Crypto *c, int connections_number
                                      uint16_t length)
 {
     LOGGER_DEBUG(c->log, "ENTERING");
+    uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
+    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
+    uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE];
 
-    const IP_Port source = tcp_connections_number_to_ip_port(connections_number);
-    uint8_t noise_data_cookie_response[NOISE_COOKIE_RESPONSE_LENGTH];
-    if (noise_create_cookie_response(c, noise_data_cookie_response, &source, packet) != sizeof(noise_data_cookie_response)) {
-        return 1;
+    if (handle_cookie_request(c, request_plain, shared_key, dht_public_key, packet, length) != 0) {
+        return -1;
     }
 
-    const int ret = send_packet_tcp_connection(c->tcp_c, connections_number, noise_data_cookie_response, sizeof(noise_data_cookie_response));
+    uint8_t data[COOKIE_RESPONSE_LENGTH];
+
+    if (create_cookie_response(c, data, request_plain, shared_key, dht_public_key) != sizeof(data)) {
+        return -1;
+    }
+
+    const int ret = send_packet_tcp_connection(c->tcp_c, connections_number, data, sizeof(data));
     return ret;
 }
 
@@ -608,14 +515,25 @@ static int tcp_oob_handle_cookie_request(const Net_Crypto *c, unsigned int tcp_c
         const uint8_t *dht_public_key, const uint8_t *packet, uint16_t length)
 {
     LOGGER_DEBUG(c->log, "ENTERING");
+    uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
+    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
+    uint8_t dht_public_key_temp[CRYPTO_PUBLIC_KEY_SIZE];
 
-    const IP_Port source = tcp_connections_number_to_ip_port(tcp_connections_number);
-    uint8_t noise_data_cookie_response[NOISE_COOKIE_RESPONSE_LENGTH];
-    if (noise_create_cookie_response(c, noise_data_cookie_response, &source, packet) != sizeof(noise_data_cookie_response)) {
-        return 1;
+    if (handle_cookie_request(c, request_plain, shared_key, dht_public_key_temp, packet, length) != 0) {
+        return -1;
     }
 
-    const int ret = tcp_send_oob_packet(c->tcp_c, tcp_connections_number, dht_public_key, noise_data_cookie_response, sizeof(noise_data_cookie_response));
+    if (!pk_equal(dht_public_key, dht_public_key_temp)) {
+        return -1;
+    }
+
+    uint8_t data[COOKIE_RESPONSE_LENGTH];
+
+    if (create_cookie_response(c, data, request_plain, shared_key, dht_public_key) != sizeof(data)) {
+        return -1;
+    }
+
+    const int ret = tcp_send_oob_packet(c->tcp_c, tcp_connections_number, dht_public_key, data, sizeof(data));
     return ret;
 }
 
@@ -659,14 +577,13 @@ static int handle_cookie_response(const Memory *mem, uint8_t *cookie, uint64_t *
  * @retval COOKIE_LENGTH on success.
  */
 non_null()
-static int noise_handle_cookie_response(const Net_Crypto *c, uint8_t noise_peer_cookie[NOISE_COOKIE_LENGTH],
+static int noise_handle_cookie_response(const Memory *mem, uint8_t noise_peer_cookie[NOISE_COOKIE_LENGTH],
                                   const uint8_t packet[NOISE_COOKIE_RESPONSE_LENGTH],
                                   const uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE], const uint8_t *noise_mac1_sent)
 {
     // if (length != NOISE_COOKIE_RESPONSE_LENGTH) {
     //     return -1;
     // }
-    LOGGER_DEBUG(c->log, "ENTERING: noise_handle_cookie_response()");
 
     //TODO: precompute for crypto_connection?
     uint8_t peer_cookie_xaead_symmetric_key[CRYPTO_SYMMETRIC_KEY_SIZE];
@@ -676,13 +593,21 @@ static int noise_handle_cookie_response(const Net_Crypto *c, uint8_t noise_peer_
     const int len = decrypt_data_symmetric_xaead(peer_cookie_xaead_symmetric_key, packet + 1, packet + 1 + CRYPTO_NONCE_SIZE, 
             NOISE_COOKIE_LENGTH + CRYPTO_MAC_SIZE, noise_peer_cookie, noise_mac1_sent, NOISE_MAC1_LENGTH);
 
-    LOGGER_DEBUG(c->log, "len: %d", len);
-
-    if (len != NOISE_COOKIE_LENGTH) {
+    if (len != NOISE_COOKIE_LENGTH + CRYPTO_MAC_SIZE) {
         return -1;
     }
 
     return NOISE_COOKIE_LENGTH;
+}
+
+/*
+* TODO: Helper function to print hashes, keys, packets, etc.
+* TODO: remove from production code or make dependent on MIN_LOGGER_LEVEL=DEBUG?
+* bytes_to_string() from util.h
+*/
+static void bytes2string(char *string, size_t string_length, const uint8_t *bytes, size_t bytes_length, const Logger *log)
+{
+    bytes_to_string(bytes, bytes_length, string, string_length);
 }
 
 /* Non-noise: Necessary for backwards compatiblity to non-Noise handshake */
@@ -692,6 +617,12 @@ static int noise_handle_cookie_response(const Net_Crypto *c, uint8_t noise_peer_
 // #define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + COOKIE_LENGTH + CRYPTO_MAC_SIZE)
 // #define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR (CRYPTO_NONCE_SIZE + COOKIE_LENGTH + COOKIE_LENGTH)
 // #define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER (CRYPTO_NONCE_SIZE + COOKIE_LENGTH)
+
+/* Noise: Necessary for Noise-based handshake (Noise cookie phase + Noise_IK_25519_ChaChaPoly_BLAKE2b) */
+#define NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH + NOISE_MAC2_LENGTH)
+#define NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH + NOISE_MAC2_LENGTH)
+#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR (CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8)
+#define NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER 0
 
 
 // /**  @brief Create a handshake packet and put it in packet. Currently supports noise-Noise and Noise handshake.
@@ -1012,18 +943,15 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             //             (sizeof(handshake_payload_plain)+CRYPTO_MAC_SIZE), c->log);
             // LOGGER_DEBUG(c->log, "Ciphertext INITIATOR: %s", log_ciphertext);
 
-            /* NoiseIK cookie mechanism sent INITIATOR hs packet as cookie request */
-            // packet[0] = NET_PACKET_CRYPTO_HS;
-            packet[0] = NET_PACKET_COOKIE_REQUEST;
+            packet[0] = NET_PACKET_CRYPTO_HS;
 
-            //TODO: MAC1+MAC2 exclude packet type => problem?
-            uint8_t packet_mac1_data[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
-            memcpy(packet_mac1_data, packet + 1, sizeof(packet_mac1_data));
+            uint8_t packet_mac1[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
+            memcpy(packet_mac1, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
             uint8_t mac1_peer_symmetric_key[CRYPTO_SYMMETRIC_KEY_SIZE];
             precompute_mac_key(mac1_peer_symmetric_key, peer_dht_pubkey, noise_mac1_key_label);
             uint8_t mac1[NOISE_MAC1_LENGTH];
 
-            crypto_mac_blake2b_128(mac1, mac1_peer_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1_data, sizeof(packet_mac1_data));
+            crypto_mac_blake2b_128(mac1, mac1_peer_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
             memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE, 
                 mac1, NOISE_MAC1_LENGTH);
             
@@ -1096,19 +1024,18 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
             packet[0] = NET_PACKET_CRYPTO_HS;
 
-            //TODO: MAC1+MAC2 exclude packet type => problem?
-            uint8_t packet_mac1_data[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
-            memcpy(packet_mac1_data, packet +1, sizeof(packet_mac1_data));
+            uint8_t packet_mac1[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
+            memcpy(packet_mac1, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
             uint8_t mac1_peer_symmetric_key[CRYPTO_SYMMETRIC_KEY_SIZE];
             precompute_mac_key(mac1_peer_symmetric_key, peer_dht_pubkey, noise_mac1_key_label);
             uint8_t mac1[NOISE_MAC1_LENGTH];
 
-            crypto_mac_blake2b_128(mac1, mac1_peer_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1_data, sizeof(packet_mac1_data));
+            crypto_mac_blake2b_128(mac1, mac1_peer_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
             memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE, 
                 mac1, NOISE_MAC1_LENGTH);
 
             uint8_t noise_mac2[NOISE_MAC2_LENGTH];
-            crypto_mac_blake2b_128(noise_mac2, cookie, NOISE_COOKIE_LENGTH, packet + 1, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - 1 - NOISE_MAC2_LENGTH));
+            crypto_mac_blake2b_128(noise_mac2, cookie, NOISE_COOKIE_LENGTH, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC2_LENGTH));
             memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + NOISE_MAC2_LENGTH, 
                 noise_mac2, NOISE_MAC2_LENGTH);
 
@@ -1447,6 +1374,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
     if (noise_handshake != nullptr) {
         LOGGER_DEBUG(c->log, "NOISE handshake => INITIATOR or RESPONDER: %d", noise_handshake->initiator);
 
+        uint8_t cookie_plain[COOKIE_DATA_LENGTH];
+
         /* -> e, es, s, ss */
         /* TODO: New Cookies 
         Initiator: Handshake packet structure (Noise_IK_25519_ChaChaPoly_BLAKE2b)
@@ -1568,6 +1497,28 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
                 return false;
             }
 
+            /* Verify MAC1 */
+            uint8_t packet_mac1[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
+            memcpy(packet_mac1, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
+            uint8_t mac1[NOISE_MAC1_LENGTH];
+            crypto_mac_blake2b_128(mac1, c->mac1_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
+
+            if (memcmp(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE,
+                    packet_mac1, NOISE_MAC1_LENGTH) != 0) {
+                return false;
+            }
+
+            /* Verify MAC2 */
+            uint8_t mac2[NOISE_MAC2_LENGTH];
+            uint8_t packet_mac2[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC2_LENGTH];
+            memcpy(packet_mac2, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC2_LENGTH));
+            crypto_mac_blake2b_128(mac2, c->cookie_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac2, (NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER - NOISE_MAC2_LENGTH));
+
+            if (memcmp(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH,
+                    packet_mac2, NOISE_MAC2_LENGTH) != 0) {
+                return false;
+            }
+
             memcpy(noise_handshake->remote_ephemeral, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
             noise_mix_hash(noise_handshake->hash, noise_handshake->remote_ephemeral, CRYPTO_PUBLIC_KEY_SIZE);
 
@@ -1606,7 +1557,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t *nonce, uint8_t
 
             /* necessary */
             //TODO: remove
-            // memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
+            memcpy(dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: memzero packet, unwatend side effects? TODO: not possible currently because const
             // crypto_memzero(packet, length);
@@ -2575,7 +2526,7 @@ non_null()
 static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
 {
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
@@ -2592,7 +2543,7 @@ static int send_temp_packet(Net_Crypto *c, int crypt_connection_id)
     }
 
     conn->temp_packet_sent_time = current_time_monotonic(c->mono_time);
-    LOGGER_DEBUG(c->log, "conn->temp_packet_sent_time: %lu", conn->temp_packet_sent_time);
+    // LOGGER_DEBUG(c->log, "conn->temp_packet_sent_time: %lu", conn->temp_packet_sent_time);
     ++conn->temp_packet_num_sent;
     return 0;
 }
@@ -2909,7 +2860,7 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
     // uint8_t noise_mac1_sent[NOISE_MAC1_LENGTH];
     // memcpy(noise_mac1_sent, conn->temp_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE, NOISE_MAC1_LENGTH);
     uint8_t noise_peer_cookie[NOISE_COOKIE_LENGTH];
-    if (noise_handle_cookie_response(c, noise_peer_cookie, packet, conn->peer_dht_public_key, 
+    if (noise_handle_cookie_response(c->mem, noise_peer_cookie, packet, conn->peer_dht_public_key, 
         noise_handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE) != NOISE_COOKIE_LENGTH) {
         return -1;
     }
@@ -2931,21 +2882,14 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
     if (conn->noise_handshake != nullptr) {
         if (conn->noise_handshake->initiator) {
             LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake");
-            noise_handshake_packet[0] = NET_PACKET_CRYPTO_HS;
             /* calculate NoiseIK MAC2 for initiator handshake packet */
             uint8_t noise_mac2[NOISE_MAC2_LENGTH];
-            crypto_mac_blake2b_128(noise_mac2, noise_peer_cookie, NOISE_COOKIE_LENGTH, noise_handshake_packet + 1, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - 1 - NOISE_MAC2_LENGTH));
+            crypto_mac_blake2b_128(noise_mac2, noise_peer_cookie, NOISE_COOKIE_LENGTH, noise_handshake_packet, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC2_LENGTH));
             memcpy(noise_handshake_packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH, 
             noise_mac2, NOISE_MAC2_LENGTH);
             if (new_temp_packet(c, crypt_connection_id, noise_handshake_packet, sizeof(noise_handshake_packet)) != 0) {
                 return -1;
             }
-
-            //TODO: remove from production code
-            char log_handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR*2+1];
-            bytes2string(log_handshake_packet, sizeof(log_handshake_packet), noise_handshake_packet, NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR, c->log);
-            LOGGER_DEBUG(c->log, "INITIATOR handshake packet: %s", log_handshake_packet);
-            send_temp_packet(c, crypt_connection_id);
         } else {
             return -1;
         }
@@ -2954,7 +2898,6 @@ static int handle_packet_cookie_response(Net_Crypto *c, int crypt_connection_id,
     }
 
     conn->status = CRYPTO_CONN_HANDSHAKE_SENT;
-    LOGGER_DEBUG(c->log, "end");
     return 0;
 }
 
@@ -3008,26 +2951,16 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
         LOGGER_DEBUG(c->log, "Noise handshake");
         const IP_Port ip_port = return_ip_port_connection(c, crypt_connection_id);
-        LOGGER_DEBUG(c->log, "after return_ip_port_connection()");
         if (conn->noise_handshake->initiator) {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
                 LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
                 //TODO: fails if peer receives two handshake packets.. check for send_key/recv_key?
-                if (noise_verify_mac1_mac2(packet, length, c, &ip_port, true) != true) {
-                    return -1;
-                }
-
                 if (!handle_crypto_handshake(c, conn->recv_nonce, nullptr, nullptr, dht_public_key, nullptr,
                                              packet, length, conn->public_key, conn->noise_handshake, &ip_port)) {
                     return -1;
                 }
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGED TO RESPONDER");
-                
-                if (noise_verify_mac1_mac2(packet, length, c, &ip_port, true) != true) {
-                    return -1;
-                }
-
                 if (noise_handshake_init(conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
                 }
@@ -3060,11 +2993,6 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         else {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "RESPONDER: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
-
-                if (noise_verify_mac1_mac2(packet, length, c, &ip_port, true) != true) {
-                    return -1;
-                }
-
                 /* necessary, otherwise broken after INITIATOR to RESPONDER change; also necessary without change */
                 if (noise_handshake_init(conn->noise_handshake, c->self_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
@@ -3445,10 +3373,42 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
     /* Backwards comptability: Differention between non-Noise and Noise-based handshake based on received HS packet length */ 
     if (length != HANDSHAKE_PACKET_LENGTH) {
-        //TODO: add check for MAC1 and MAC2, if both ok, send RESPONDER handshake packet
+        //TODO: add check for MAC1 and MAC2, if both ok, call noise_create_cookie_response()
 
-        /* Verify MAC1 and MAC2 */
-        if (noise_verify_mac1_mac2(packet, length, c, source, true) != true) {
+         /* Verify MAC1 */
+        uint8_t packet_mac1[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH];
+        memcpy(packet_mac1, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
+        uint8_t noise_mac1[NOISE_MAC1_LENGTH];
+        crypto_mac_blake2b_128(noise_mac1, c->mac1_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac1, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC1_LENGTH - NOISE_MAC2_LENGTH));
+
+        if (memcmp(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE,
+                packet_mac1, NOISE_MAC1_LENGTH) != 0) {            
+            return -1;
+        }
+
+        /* Verify MAC2 */
+        uint8_t mac2[NOISE_MAC2_LENGTH];
+        uint8_t packet_mac2[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC2_LENGTH];
+        memcpy(packet_mac2, packet, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC2_LENGTH));
+        crypto_mac_blake2b_128(mac2, c->cookie_symmetric_key, CRYPTO_SYMMETRIC_KEY_SIZE, packet_mac2, (NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR - NOISE_MAC2_LENGTH));
+
+        if (memcmp(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_PUBLIC_KEY_SIZE + NOISE_COOKIE_LENGTH + 8 + CRYPTO_MAC_SIZE + NOISE_MAC1_LENGTH,
+                packet_mac2, NOISE_MAC2_LENGTH) != 0) {
+            uint8_t noise_cookie_respone[NOISE_COOKIE_RESPONSE_LENGTH];
+
+            if (noise_create_cookie_response(c, noise_cookie_respone, source, noise_mac1) != NOISE_COOKIE_RESPONSE_LENGTH) {
+                return -1;
+            }
+
+            //TODO: how to send cookie response packet from here? via UDP/TCP?
+
+            // if (is_udp) {
+            //     if ((uint32_t)sendpacket(dht_get_net(c->dht), source, noise_cookie_respone, sizeof(noise_cookie_respone)) != sizeof(noise_cookie_respone)) {
+            //         return 1;
+            //     }
+            // } else {
+            //     const int ret = send_packet_tcp_connection(c->tcp_c, connections_number, data, sizeof(data));
+            // }
             return -1;
         }
 
@@ -3540,7 +3500,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
             memcpy(conn->noise_handshake, n_c.noise_handshake, sizeof(Noise_Handshake));
 
-            // memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
+            memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
 
             crypto_connection_add_source(c, crypt_connection_id, source);
 
@@ -4760,7 +4720,7 @@ Net_Crypto *new_net_crypto(const Logger *log, const Memory *mem, const Random *r
 
     temp->current_sleep_time = CRYPTO_SEND_PACKET_INTERVAL;
 
-    networking_registerhandler(dht_get_net(dht), NET_PACKET_COOKIE_REQUEST, &noise_udp_handle_cookie_request, temp);
+    networking_registerhandler(dht_get_net(dht), NET_PACKET_COOKIE_REQUEST, &udp_handle_cookie_request, temp);
     networking_registerhandler(dht_get_net(dht), NET_PACKET_COOKIE_RESPONSE, &udp_handle_packet, temp);
     networking_registerhandler(dht_get_net(dht), NET_PACKET_CRYPTO_HS, &udp_handle_packet, temp);
     networking_registerhandler(dht_get_net(dht), NET_PACKET_CRYPTO_DATA, &udp_handle_packet, temp);
