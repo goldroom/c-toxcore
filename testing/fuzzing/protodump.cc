@@ -266,7 +266,7 @@ void RecordBootstrap(const char *init, const char *bootstrap)
         sys1.clock += clock_increment;
         sys2.clock += clock_increment;
 
-        if (Fuzz_Data::DEBUG) {
+        if (Fuzz_Data::FUZZ_DEBUG) {
             printf("tox1: rng: %d (for clock)\n", clock_increment);
             printf("tox2: rng: %d (for clock)\n", clock_increment);
         }
@@ -276,7 +276,7 @@ void RecordBootstrap(const char *init, const char *bootstrap)
 
     while (tox_self_get_connection_status(tox1) == TOX_CONNECTION_NONE
         || tox_self_get_connection_status(tox2) == TOX_CONNECTION_NONE) {
-        if (Fuzz_Data::DEBUG) {
+        if (Fuzz_Data::FUZZ_DEBUG) {
             std::printf("tox1: %d, tox2: %d\n", tox_self_get_connection_status(tox1),
                 tox_self_get_connection_status(tox2));
         }
@@ -291,7 +291,7 @@ void RecordBootstrap(const char *init, const char *bootstrap)
 
     while (tox_friend_get_connection_status(tox2, friend_number, nullptr) == TOX_CONNECTION_NONE
         || tox_friend_get_connection_status(tox1, 0, nullptr) == TOX_CONNECTION_NONE) {
-        if (Fuzz_Data::DEBUG) {
+        if (Fuzz_Data::FUZZ_DEBUG) {
             std::printf("tox1: %d, tox2: %d, tox1 -> tox2: %d, tox2 -> tox1: %d\n",
                 tox_self_get_connection_status(tox1), tox_self_get_connection_status(tox2),
                 tox_friend_get_connection_status(tox1, 0, nullptr),
@@ -305,7 +305,7 @@ void RecordBootstrap(const char *init, const char *bootstrap)
     dump(sys1.take_recording(), init);
 
     while (state1.done < MESSAGE_COUNT && state2.done < MESSAGE_COUNT) {
-        if (Fuzz_Data::DEBUG) {
+        if (Fuzz_Data::FUZZ_DEBUG) {
             std::printf("tox1: %d, tox2: %d, tox1 -> tox2: %d, tox2 -> tox1: %d\n",
                 tox_self_get_connection_status(tox1), tox_self_get_connection_status(tox2),
                 tox_friend_get_connection_status(tox1, 0, nullptr),

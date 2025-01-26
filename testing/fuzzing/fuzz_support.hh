@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright © 2021-2022 The TokTok team.
+ * Copyright © 2021-2025 The TokTok team.
  */
 
 #ifndef C_TOXCORE_TESTING_FUZZING_FUZZ_SUPPORT_H
@@ -19,7 +19,7 @@
 #include "../../toxcore/tox_private.h"
 
 struct Fuzz_Data {
-    static constexpr bool DEBUG = false;
+    static constexpr bool FUZZ_DEBUG = false;
     static constexpr std::size_t TRACE_TRAP = -1;  // 579;
 
 private:
@@ -47,7 +47,7 @@ public:
             // Special case because memcpy causes UB for bool (which can't be
             // anything other than 0 or 1).
             const bool val = fd.data_[0];
-            if (DEBUG) {
+            if (FUZZ_DEBUG) {
                 std::printf("consume@%zu(%s): bool %s\n", fd.pos(), func, val ? "true" : "false");
             }
             ++fd.data_;
@@ -74,7 +74,7 @@ public:
     const uint8_t *consume(const char *func, std::size_t count)
     {
         const uint8_t *val = data_;
-        if (DEBUG) {
+        if (FUZZ_DEBUG) {
             if (pos() == TRACE_TRAP) {
                 __asm__("int $3");
             }
@@ -266,7 +266,7 @@ struct Null_System : System {
  * initialised with the same seed will be identical (same keys, etc.).
  */
 struct Record_System : System {
-    static constexpr bool DEBUG = Fuzz_Data::DEBUG;
+    static constexpr bool FUZZ_DEBUG = Fuzz_Data::FUZZ_DEBUG;
 
     /** @brief State shared between all tox instances. */
     struct Global {
@@ -300,7 +300,7 @@ struct Record_System : System {
 
     void push(bool byte)
     {
-        if (DEBUG) {
+        if (FUZZ_DEBUG) {
             if (recording_.size() == Fuzz_Data::TRACE_TRAP) {
                 __asm__("int $3");
             }
@@ -312,7 +312,7 @@ struct Record_System : System {
 
     void push(uint8_t byte)
     {
-        if (DEBUG) {
+        if (FUZZ_DEBUG) {
             if (recording_.size() == Fuzz_Data::TRACE_TRAP) {
                 __asm__("int $3");
             }
@@ -323,7 +323,7 @@ struct Record_System : System {
 
     void push(const uint8_t *bytes, std::size_t size)
     {
-        if (DEBUG) {
+        if (FUZZ_DEBUG) {
             if (recording_.size() == Fuzz_Data::TRACE_TRAP) {
                 __asm__("int $3");
             }
@@ -352,7 +352,7 @@ private:
  * everything down drastically. It's useful while developing the fuzzer and the
  * protodump program.
  */
-extern const bool DEBUG;
+extern const bool FUZZ_DEBUG;
 
 inline constexpr char tox_log_level_name(Tox_Log_Level level)
 {

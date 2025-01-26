@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2016-2025 The TokTok team.
  * Copyright © 2014 Tox project.
  */
 
@@ -27,6 +27,7 @@
 #include "logger.h"
 #include "mem.h"
 #include "mono_time.h"
+#include "net_profile.h"
 #include "network.h"
 #include "onion.h"
 
@@ -91,6 +92,9 @@ struct TCP_Server {
     uint64_t counter;
 
     BS_List accepted_key_list;
+
+    /* Network profile for all TCP server packets. */
+    Net_Profile *net_profile;
 };
 
 static_assert(sizeof(TCP_Server) < 7 * 1024 * 1024,
@@ -236,6 +240,7 @@ static int add_accepted(TCP_Server *tcp_server, const Mono_Time *mono_time, TCP_
     tcp_server->accepted_connection_array[index].identifier = ++tcp_server->counter;
     tcp_server->accepted_connection_array[index].last_pinged = mono_time_get(mono_time);
     tcp_server->accepted_connection_array[index].ping_id = 0;
+    tcp_server->accepted_connection_array[index].con.net_profile = tcp_server->net_profile;
 
     return index;
 }
@@ -357,7 +362,7 @@ static int handle_tcp_handshake(const Logger *logger, TCP_Secure_Connection *con
 
     const IP_Port ipp = {{{0}}};
 
-    if (TCP_SERVER_HANDSHAKE_SIZE != net_send(con->con.ns, logger, con->con.sock, response, TCP_SERVER_HANDSHAKE_SIZE, &ipp)) {
+    if (TCP_SERVER_HANDSHAKE_SIZE != net_send(con->con.ns, con->con.mem, logger, con->con.sock, response, TCP_SERVER_HANDSHAKE_SIZE, &ipp, con->con.net_profile)) {
         crypto_memzero(shared_key, sizeof(shared_key));
         return -1;
     }
@@ -680,6 +685,7 @@ static int handle_tcp_packet(TCP_Server *tcp_server, uint32_t con_id, const uint
     }
 
     TCP_Secure_Connection *const con = &tcp_server->accepted_connection_array[con_id];
+    netprof_record_packet(con->con.net_profile, data[0], length, PACKET_DIRECTION_RECV);
 
     switch (data[0]) {
         case TCP_PACKET_ROUTING_REQUEST: {
@@ -914,7 +920,7 @@ static int accept_connection(TCP_Server *tcp_server, Socket sock)
 }
 
 non_null()
-static Socket new_listening_tcp_socket(const Logger *logger, const Network *ns, Family family, uint16_t port)
+static Socket new_listening_tcp_socket(const Logger *logger, const Memory *mem, const Network *ns, Family family, uint16_t port)
 {
     const Socket sock = net_socket(ns, family, TOX_SOCK_STREAM, TOX_PROTO_TCP);
 
@@ -936,10 +942,10 @@ static Socket new_listening_tcp_socket(const Logger *logger, const Network *ns, 
     ok = ok && bind_to_port(ns, sock, family, port) && (net_listen(ns, sock, TCP_MAX_BACKLOG) == 0);
 
     if (!ok) {
-        char *const error = net_new_strerror(net_error());
+        char *const error = net_new_strerror(mem, net_error());
         LOGGER_WARNING(logger, "could not bind to TCP port %d (family = %d): %s",
                        port, family.value, error != nullptr ? error : "(null)");
-        net_kill_strerror(error);
+        net_kill_strerror(mem, error);
         kill_sock(ns, sock);
         return net_invalid_socket();
     }
@@ -969,6 +975,14 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
         return nullptr;
     }
 
+    Net_Profile *np = netprof_new(logger, mem);
+
+    if (np == nullptr) {
+        mem_delete(mem, temp);
+        return nullptr;
+    }
+
+    temp->net_profile = np;
     temp->logger = logger;
     temp->mem = mem;
     temp->ns = ns;
@@ -978,6 +992,7 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
 
     if (socks_listening == nullptr) {
         LOGGER_ERROR(logger, "socket allocation failed");
+        netprof_kill(mem, temp->net_profile);
         mem_delete(mem, temp);
         return nullptr;
     }
@@ -989,6 +1004,7 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
 
     if (temp->efd == -1) {
         LOGGER_ERROR(logger, "epoll initialisation failed");
+        netprof_kill(mem, temp->net_profile);
         mem_delete(mem, socks_listening);
         mem_delete(mem, temp);
         return nullptr;
@@ -999,7 +1015,7 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
     const Family family = ipv6_enabled ? net_family_ipv6() : net_family_ipv4();
 
     for (uint32_t i = 0; i < num_sockets; ++i) {
-        const Socket sock = new_listening_tcp_socket(logger, ns, family, ports[i]);
+        const Socket sock = new_listening_tcp_socket(logger, mem, ns, family, ports[i]);
 
         if (!sock_valid(sock)) {
             continue;
@@ -1022,6 +1038,7 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
     }
 
     if (temp->num_listening_socks == 0) {
+        netprof_kill(mem, temp->net_profile);
         mem_delete(mem, temp->socks_listening);
         mem_delete(mem, temp);
         return nullptr;
@@ -1040,7 +1057,7 @@ TCP_Server *new_tcp_server(const Logger *logger, const Memory *mem, const Random
     memcpy(temp->secret_key, secret_key, CRYPTO_SECRET_KEY_SIZE);
     crypto_derive_public_key(temp->public_key, temp->secret_key);
 
-    bs_list_init(&temp->accepted_key_list, CRYPTO_PUBLIC_KEY_SIZE, 8, memcmp);
+    bs_list_init(&temp->accepted_key_list, mem, CRYPTO_PUBLIC_KEY_SIZE, 8, memcmp);
 
     return temp;
 }
@@ -1422,6 +1439,16 @@ void kill_tcp_server(TCP_Server *tcp_server)
 
     crypto_memzero(tcp_server->secret_key, sizeof(tcp_server->secret_key));
 
+    netprof_kill(tcp_server->mem, tcp_server->net_profile);
     mem_delete(tcp_server->mem, tcp_server->socks_listening);
     mem_delete(tcp_server->mem, tcp_server);
+}
+
+const Net_Profile *tcp_server_get_net_profile(const TCP_Server *tcp_server)
+{
+    if (tcp_server == nullptr) {
+        return nullptr;
+    }
+
+    return tcp_server->net_profile;
 }

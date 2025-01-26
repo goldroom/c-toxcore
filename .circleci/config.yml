@@ -3,21 +3,18 @@ version: 2
 
 workflows:
   version: 2
-  program-analysis:
-    # TODO(iphydf): Re-enable tsan when it's fixed.
+  circleci:
     jobs:
-      # Dynamic analysis in the Bazel build
       - bazel-asan
+      - bazel-dbg
       - bazel-msan
-      # - bazel-tsan
-      # Dynamic analysis with CMake
-      - asan
-      # - tsan
-      - ubsan
-      # Static analysis
+      - bazel-opt
       - clang-analyze
       - cpplint
       - static-analysis
+      - cimple
+      - cimplefmt
+      - generate-events
 
 jobs:
   bazel-asan:
@@ -30,19 +27,15 @@ jobs:
       - run: .circleci/bazel-test
           //c-toxcore/...
 
-  bazel-tsan:
+  bazel-dbg:
     working_directory: /tmp/cirrus-ci-build
     docker:
-      - image: toxchat/toktok-stack:latest-tsan
+      - image: toxchat/toktok-stack:latest-debug
 
     steps:
       - checkout
       - run: .circleci/bazel-test
           //c-toxcore/...
-          -//c-toxcore/auto_tests:conference_av_test
-          -//c-toxcore/auto_tests:conference_test
-          -//c-toxcore/auto_tests:onion_test
-          -//c-toxcore/auto_tests:tox_many_test
 
   bazel-msan:
     working_directory: /tmp/cirrus-ci-build
@@ -54,7 +47,17 @@ jobs:
       - run: .circleci/bazel-test
           //c-toxcore/auto_tests:lossless_packet_test
 
-  asan:
+  bazel-opt:
+    working_directory: /tmp/cirrus-ci-build
+    docker:
+      - image: toxchat/toktok-stack:latest-release
+
+    steps:
+      - checkout
+      - run: .circleci/bazel-test
+          //c-toxcore/...
+
+  static-analysis:
     working_directory: ~/work
     docker:
       - image: ubuntu
@@ -78,39 +81,6 @@ jobs:
             llvm-dev
             ninja-build
             pkg-config
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: CC=clang .circleci/cmake-asan
-
-  tsan:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: CC=clang .circleci/cmake-tsan
-
-  ubsan:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: CC=clang .circleci/cmake-ubsan
-
-  static-analysis:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
       - run:
           apt-get install -y --no-install-recommends
             ca-certificates
@@ -147,3 +117,39 @@ jobs:
       - checkout
       - run: git submodule update --init --recursive
       - run: other/analysis/run-cpplint
+
+  cimple:
+    working_directory: /tmp/cirrus-ci-build
+    docker:
+      - image: toxchat/toktok-stack:latest-release
+
+    steps:
+      - checkout
+      - run: git submodule update --init --recursive
+      - run: /src/workspace/tools/inject-repo c-toxcore
+      - run: cd /src/workspace &&
+          bazel test
+            -k
+            --build_tag_filters=haskell
+            --test_tag_filters=haskell
+            --
+            //c-toxcore/...
+
+  cimplefmt:
+    working_directory: ~/work
+    machine: { image: ubuntu-2204:current }
+
+    steps:
+      - checkout
+      - run: git submodule update --init --recursive
+      - run: other/docker/cimplefmt/run -u $(find tox* -name "*.[ch]")
+
+  generate-events:
+    working_directory: ~/work
+    machine: { image: ubuntu-2204:current }
+
+    steps:
+      - checkout
+      - run: git submodule update --init --recursive
+      - run: other/event_tooling/run
+      - run: git diff --exit-code

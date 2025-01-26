@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright © 2016-2023 The TokTok team.
+ * Copyright © 2016-2025 The TokTok team.
  * Copyright © 2013 Tox project.
  */
 
@@ -86,6 +86,7 @@
 #include "ccompat.h"
 #include "logger.h"
 #include "mem.h"
+#include "net_profile.h"
 #include "util.h"
 
 // Disable MSG_NOSIGNAL on systems not supporting it, e.g. Windows, FreeBSD
@@ -876,19 +877,19 @@ static const char *net_packet_type_name(Net_Packet_Type type)
 }
 
 non_null()
-static void loglogdata(const Logger *log, const char *message, const uint8_t *buffer,
+static void loglogdata(const Logger *log, const Memory *mem, const char *message, const uint8_t *buffer,
                        uint16_t buflen, const IP_Port *ip_port, long res)
 {
     if (res < 0) { /* Windows doesn't necessarily know `%zu` */
         Ip_Ntoa ip_str;
         const int error = net_error();
-        char *strerror = net_new_strerror(error);
+        char *strerror = net_new_strerror(mem, error);
         LOGGER_TRACE(log, "[%02x = %-21s] %s %3u%c %s:%u (%u: %s) | %08x%08x...%02x",
                      buffer[0], net_packet_type_name((Net_Packet_Type)buffer[0]), message,
                      min_u16(buflen, 999), 'E',
                      net_ip_ntoa(&ip_port->ip, &ip_str), net_ntohs(ip_port->port), error,
                      strerror, data_0(buflen, buffer), data_1(buflen, buffer), buffer[buflen - 1]);
-        net_kill_strerror(strerror);
+        net_kill_strerror(mem, strerror);
     } else if ((res > 0) && ((size_t)res <= buflen)) {
         Ip_Ntoa ip_str;
         LOGGER_TRACE(log, "[%02x = %-21s] %s %3u%c %s:%u (%u: %s) | %08x%08x...%02x",
@@ -906,11 +907,16 @@ static void loglogdata(const Logger *log, const char *message, const uint8_t *bu
     }
 }
 
-int net_send(const Network *ns, const Logger *log,
-             Socket sock, const uint8_t *buf, size_t len, const IP_Port *ip_port)
+int net_send(const Network *ns, const Memory *mem, const Logger *log,
+             Socket sock, const uint8_t *buf, size_t len, const IP_Port *ip_port, Net_Profile *net_profile)
 {
     const int res = ns->funcs->send(ns->obj, sock, buf, len);
-    loglogdata(log, "T=>", buf, len, ip_port, res);
+
+    if (res > 0) {
+        netprof_record_packet(net_profile, buf[0], res, PACKET_DIRECTION_SEND);
+    }
+
+    loglogdata(log, mem, "T=>", buf, len, ip_port, res);
     return res;
 }
 
@@ -922,11 +928,11 @@ static int net_sendto(
     return ns->funcs->sendto(ns->obj, sock, buf, len, addr);
 }
 
-int net_recv(const Network *ns, const Logger *log,
+int net_recv(const Network *ns, const Memory *mem, const Logger *log,
              Socket sock, uint8_t *buf, size_t len, const IP_Port *ip_port)
 {
     const int res = ns->funcs->recv(ns->obj, sock, buf, len);
-    loglogdata(log, "=>T", buf, len, ip_port, res);
+    loglogdata(log, mem, "=>T", buf, len, ip_port, res);
     return res;
 }
 
@@ -1013,6 +1019,8 @@ struct Networking_Core {
     uint16_t port;
     /* Our UDP socket. */
     Socket sock;
+
+    Net_Profile *udp_net_profile;
 };
 
 Family net_family(const Networking_Core *net)
@@ -1095,9 +1103,14 @@ int send_packet(const Networking_Core *net, const IP_Port *ip_port, Packet packe
     }
 
     const long res = net_sendto(net->ns, net->sock, packet.data, packet.length, &addr, &ipp_copy);
-    loglogdata(net->log, "O=>", packet.data, packet.length, ip_port, res);
+    loglogdata(net->log, net->mem, "O=>", packet.data, packet.length, ip_port, res);
 
     assert(res <= INT_MAX);
+
+    if (res == packet.length && packet.data != nullptr) {
+        netprof_record_packet(net->udp_net_profile, packet.data[0], packet.length, PACKET_DIRECTION_SEND);
+    }
+
     return (int)res;
 }
 
@@ -1131,9 +1144,9 @@ static int receivepacket(const Network *ns, const Memory *mem, const Logger *log
         const int error = net_error();
 
         if (!should_ignore_recv_error(error)) {
-            char *strerror = net_new_strerror(error);
+            char *strerror = net_new_strerror(mem, error);
             LOGGER_ERROR(log, "unexpected error reading from socket: %u, %s", error, strerror);
-            net_kill_strerror(strerror);
+            net_kill_strerror(mem, strerror);
         }
 
         return -1; /* Nothing received. */
@@ -1175,7 +1188,7 @@ static int receivepacket(const Network *ns, const Memory *mem, const Logger *log
         return -1;
     }
 
-    loglogdata(log, "=>O", data, MAX_UDP_PACKET_SIZE, ip_port, *length);
+    loglogdata(log, mem, "=>O", data, MAX_UDP_PACKET_SIZE, ip_port, *length);
 
     return 0;
 }
@@ -1201,6 +1214,8 @@ void networking_poll(const Networking_Core *net, void *userdata)
         if (length < 1) {
             continue;
         }
+
+        netprof_record_packet(net->udp_net_profile, data[0], length, PACKET_DIRECTION_RECV);
 
         const Packet_Handler *const handler = &net->packethandlers[data[0]];
 
@@ -1262,6 +1277,14 @@ Networking_Core *new_networking_ex(
         return nullptr;
     }
 
+    Net_Profile *np = netprof_new(log, mem);
+
+    if (np == nullptr) {
+        free(temp);
+        return nullptr;
+    }
+
+    temp->udp_net_profile = np;
     temp->ns = ns;
     temp->log = log;
     temp->mem = mem;
@@ -1275,9 +1298,10 @@ Networking_Core *new_networking_ex(
     /* Check for socket error. */
     if (!sock_valid(temp->sock)) {
         const int neterror = net_error();
-        char *strerror = net_new_strerror(neterror);
+        char *strerror = net_new_strerror(mem, neterror);
         LOGGER_ERROR(log, "failed to get a socket?! %d, %s", neterror, strerror);
-        net_kill_strerror(strerror);
+        net_kill_strerror(mem, strerror);
+        netprof_kill(mem, temp->udp_net_profile);
         mem_delete(mem, temp);
 
         if (error != nullptr) {
@@ -1378,7 +1402,7 @@ Networking_Core *new_networking_ex(
         const int res = net_setsockopt(ns, temp->sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
 
         const int neterror = net_error();
-        char *strerror = net_new_strerror(neterror);
+        char *strerror = net_new_strerror(mem, neterror);
 
         if (res < 0) {
             LOGGER_INFO(log, "Failed to activate local multicast membership in FF02::1. (%d, %s)", neterror, strerror);
@@ -1386,7 +1410,7 @@ Networking_Core *new_networking_ex(
             LOGGER_TRACE(log, "Local multicast group joined successfully. (%d, %s)", neterror, strerror);
         }
 
-        net_kill_strerror(strerror);
+        net_kill_strerror(mem, strerror);
 #endif /* ESP_PLATFORM */
     }
 
@@ -1444,10 +1468,10 @@ Networking_Core *new_networking_ex(
 
     Ip_Ntoa ip_str;
     const int neterror = net_error();
-    char *strerror = net_new_strerror(neterror);
+    char *strerror = net_new_strerror(mem, neterror);
     LOGGER_ERROR(log, "failed to bind socket: %d, %s IP: %s port_from: %u port_to: %u",
                  neterror, strerror, net_ip_ntoa(ip, &ip_str), port_from, port_to);
-    net_kill_strerror(strerror);
+    net_kill_strerror(mem, strerror);
     kill_networking(temp);
 
     if (error != nullptr) {
@@ -1485,6 +1509,7 @@ void kill_networking(Networking_Core *net)
         kill_sock(net->ns, net->sock);
     }
 
+    netprof_kill(net->mem, net->udp_net_profile);
     mem_delete(net->mem, net);
 }
 
@@ -2015,7 +2040,21 @@ bool addr_resolve_or_parse_ip(const Network *ns, const Memory *mem, const char *
     return addr_parse_ip(address, to);
 }
 
-bool net_connect(const Network *ns, const Memory *mem, const Logger *log, Socket sock, const IP_Port *ip_port)
+const char *net_err_connect_to_string(Net_Err_Connect err)
+{
+    switch (err) {
+        case NET_ERR_CONNECT_OK:
+            return "NET_ERR_CONNECT_OK";
+        case NET_ERR_CONNECT_INVALID_FAMILY:
+            return "NET_ERR_CONNECT_INVALID_FAMILY";
+        case NET_ERR_CONNECT_FAILED:
+            return "NET_ERR_CONNECT_FAILED";
+    }
+
+    return "<invalid Net_Err_Connect>";
+}
+
+bool net_connect(const Network *ns, const Memory *mem, const Logger *log, Socket sock, const IP_Port *ip_port, Net_Err_Connect *err)
 {
     Network_Addr addr = {{0}};
 
@@ -2037,11 +2076,13 @@ bool net_connect(const Network *ns, const Memory *mem, const Logger *log, Socket
         Ip_Ntoa ip_str;
         LOGGER_ERROR(log, "cannot connect to %s:%d which is neither IPv4 nor IPv6",
                      net_ip_ntoa(&ip_port->ip, &ip_str), net_ntohs(ip_port->port));
+        *err = NET_ERR_CONNECT_INVALID_FAMILY;
         return false;
     }
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     if ((true)) {
+        *err = NET_ERR_CONNECT_OK;
         return true;
     }
 #endif /* FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION */
@@ -2056,14 +2097,16 @@ bool net_connect(const Network *ns, const Memory *mem, const Logger *log, Socket
 
         // Non-blocking socket: "Operation in progress" means it's connecting.
         if (!should_ignore_connect_error(error)) {
-            char *net_strerror = net_new_strerror(error);
+            char *net_strerror = net_new_strerror(mem, error);
             LOGGER_WARNING(log, "failed to connect to %s:%d: %d (%s)",
                            net_ip_ntoa(&ip_port->ip, &ip_str), net_ntohs(ip_port->port), error, net_strerror);
-            net_kill_strerror(net_strerror);
+            net_kill_strerror(mem, net_strerror);
+            *err = NET_ERR_CONNECT_FAILED;
             return false;
         }
     }
 
+    *err = NET_ERR_CONNECT_OK;
     return true;
 }
 
@@ -2324,7 +2367,7 @@ int net_error(void)
 }
 
 #ifdef OS_WIN32
-char *net_new_strerror(int error)
+char *net_new_strerror(const Memory *mem, int error)
 {
     char *str = nullptr;
     // Windows API is weird. The 5th function arg is of char* type, but we
@@ -2364,7 +2407,7 @@ static const char *net_strerror_r(int error, char *tmp, size_t tmp_size)
     return tmp;
 }
 #endif /* GNU */
-char *net_new_strerror(int error)
+char *net_new_strerror(const Memory *mem, int error)
 {
     char tmp[256];
 
@@ -2373,7 +2416,7 @@ char *net_new_strerror(int error)
     const char *retstr = net_strerror_r(error, tmp, sizeof(tmp));
     const size_t retstr_len = strlen(retstr);
 
-    char *str = (char *)malloc(retstr_len + 1);
+    char *str = (char *)mem_balloc(mem, retstr_len + 1);
 
     if (str == nullptr) {
         return nullptr;
@@ -2385,11 +2428,20 @@ char *net_new_strerror(int error)
 }
 #endif /* OS_WIN32 */
 
-void net_kill_strerror(char *strerror)
+void net_kill_strerror(const Memory *mem, char *strerror)
 {
 #ifdef OS_WIN32
     LocalFree((char *)strerror);
 #else
-    free(strerror);
+    mem_delete(mem, strerror);
 #endif /* OS_WIN32 */
+}
+
+const Net_Profile *net_get_net_profile(const Networking_Core *net)
+{
+    if (net == nullptr) {
+        return nullptr;
+    }
+
+    return net->udp_net_profile;
 }

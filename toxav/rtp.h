@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright © 2016-2018 The TokTok team.
+ * Copyright © 2016-2025 The TokTok team.
  * Copyright © 2013-2015 Tox project.
  */
 #ifndef C_TOXCORE_TOXAV_RTP_H
@@ -147,7 +147,7 @@ struct RTPWorkBufferList {
 
 #define DISMISS_FIRST_LOST_VIDEO_PACKET_COUNT 10
 
-typedef int rtp_m_cb(Mono_Time *mono_time, void *cs, struct RTPMessage *msg);
+typedef int rtp_m_cb(const Mono_Time *mono_time, void *cs, struct RTPMessage *msg);
 
 /**
  * RTP control session.
@@ -162,6 +162,7 @@ typedef struct RTPSession {
     struct RTPWorkBufferList *work_buffer_list;
     uint8_t  first_packets_counter; /* dismiss first few lost video packets */
     const Logger *log;
+    const Memory *mem;
     Tox *tox;
     ToxAV *toxav;
     uint32_t friend_number;
@@ -192,7 +193,7 @@ size_t rtp_header_pack(uint8_t *rdata, const struct RTPHeader *header);
  */
 size_t rtp_header_unpack(const uint8_t *data, struct RTPHeader *header);
 
-RTPSession *rtp_new(const Logger *log, int payload_type, Tox *tox, ToxAV *toxav, uint32_t friendnumber,
+RTPSession *rtp_new(const Logger *log, const Memory *mem, int payload_type, Tox *tox, ToxAV *toxav, uint32_t friendnumber,
                     BWController *bwc, void *cs, rtp_m_cb *mcb);
 void rtp_kill(const Logger *log, RTPSession *session);
 void rtp_allow_receiving_mark(RTPSession *session);
