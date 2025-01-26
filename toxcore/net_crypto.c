@@ -2280,7 +2280,7 @@ non_null(1, 3) nullable(5)
  * @return -1 in case of failure
  * @return 0 if successful
  */
-static int handle_packet_crypto_hs(const Net_Crypto *c, int crypt_connection_id, const uint8_t *packet, uint16_t length,
+static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const uint8_t *packet, uint16_t length,
                                    void *userdata)
 {
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
