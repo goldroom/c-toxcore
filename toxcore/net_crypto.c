@@ -60,32 +60,31 @@ typedef enum Crypto_Conn_State {
 } Crypto_Conn_State;
 
 typedef struct Crypto_Connection {
-    /* (Currently) all used for both non-Noise and Noise handshakes/connections */ 
+    //TODO(goldroom): kept for backwards compatibility in NoiseIK, to be removed at some point. Not used in NoiseIK handshake.
     uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real/static identity public X25519 key of the peer. */
+
     uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce used to decrypt incoming packets after non-Noise and NoiseIK handshake. */
-    //TODO(goldroom): Dot not send in NoiseIK handshake
-    uint8_t send_nonce[CRYPTO_NONCE_SIZE]; /* Nonce used to encrypt outgoing packets after non-Noise and NoiseIK handshake. */ 
+    uint8_t send_nonce[CRYPTO_NONCE_SIZE]; /* Nonce used to encrypt outgoing packets after non-Noise and NoiseIK handshake. */
+
+    //TODO(goldroom): currently in use for backwards compatibility in NoiseIK, to be removed at some point.
     uint8_t ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* Our public ephemeral X25519 key for this session. */
     uint8_t ephemeral_secret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private ephemeral X25519 key for this session. */
-    uint8_t peer_ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public ephemeral X25519 key of the peer. Not used in Noise handshake. */
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. (non-Noise handshake) */
+
+    //TODO(goldroom): kept for backwards compatibility in NoiseIK, to be removed at some point. Not used in NoiseIK handshake.
+    uint8_t peer_ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public ephemeral X25519 key of the peer. */
+
+    /* The precomputed shared key from encrypt_precompute. 
+     Used for cookie requests/responses in non-Noise and NoiseIK handshake: and for transport payload encryption (non-Noise only). */
+    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; 
+
     Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
-    uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public X25519 key of the peer */
+    uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The DHT public X25519 key of the peer. */
     
     bool noise_handshake_enabled; /* Necessary for Noise handshake backwards compatibility */
     Noise_Handshake *noise_handshake; /* NoiseIK handshake information */
-    uint8_t send_key[CRYPTO_SHARED_KEY_SIZE]; /* Symmetric key used to encrypt outgoing packets after NoiseIK handshake */
-    uint8_t recv_key[CRYPTO_SHARED_KEY_SIZE]; /* Symmetric key used to decrypt incoming packets after NoiseIK handshake */
-    //TODO: remove
-    // uint8_t noise_hash[CRYPTO_SHA512_SIZE];
-    // uint8_t noise_chaining_key[CRYPTO_SHA512_SIZE];
-    // uint8_t niose_send_key[CRYPTO_PUBLIC_KEY_SIZE];
-    // uint8_t noise_recv_key[CRYPTO_PUBLIC_KEY_SIZE];
-    //TODO: necessary?
-    // uint16_t handshake_send_interval;
-    // bool initiator;
-    // uint8_t precomputed_static_static[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t send_key[CRYPTO_SHARED_KEY_SIZE]; /* Symmetric key used to encrypt outgoing packets after NoiseIK handshake. */
+    uint8_t recv_key[CRYPTO_SHARED_KEY_SIZE]; /* Symmetric key used to decrypt incoming packets after NoiseIK handshake. */
 
     uint8_t *temp_packet; /* Where the cookie request/handshake packet is stored while it is being sent. */
     uint16_t temp_packet_length;
@@ -247,12 +246,11 @@ static int create_cookie_request(const Net_Crypto *c, uint8_t *packet, const uin
     //TODO: remove
     LOGGER_DEBUG(c->log, "ENTERING");
     
-    //TODO: adapt for new Noise-cookie mechanism _only_
-    //TODO: or different cookie mechanism? E.g. as in WireGuard?
+    //TODO(goldroom): adapt for new Noise-cookie mechanism _only_ or different cookie mechanism? E.g. as in WireGuard?
     uint8_t plain[COOKIE_REQUEST_PLAIN_LENGTH];
 
     memcpy(plain, c->self_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-    //TODO: "Padding is used to maintain backwards-compatibility with previous versions of the protocol." => can this be removed by now?
+    //TODO(goldroom): "Padding is used to maintain backwards-compatibility with previous versions of the protocol." => can this be removed by now?
     memzero(plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(plain + (CRYPTO_PUBLIC_KEY_SIZE * 2), &number, sizeof(uint64_t));
     const uint8_t *tmp_shared_key = dht_get_shared_key_sent(c->dht, dht_public_key);
@@ -605,8 +603,8 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             memcpy(cookie_plain, peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
             memcpy(cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, peer_dht_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
-            //TODO: Send/Receive cookies again outside of handshake payload encryption? Double encrypted otherwise
-            /* OtherCookie is added to payload */
+            /* Cookies are currently double-encrypted, but decryption also necessary if they would be authenticated via AD */
+            /* INITIATOR OtherCookie is added to payload */
             if (create_cookie(c->mem, c->rng, c->mono_time, handshake_payload_plain + COOKIE_LENGTH,
                               cookie_plain, c->cookie_symmetric_key) != 0) {
                 return -1;
@@ -783,7 +781,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             // bytes2string(log_packet, sizeof(log_packet), packet, NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR, c->log);
             // LOGGER_DEBUG(c->log, "HS Packet I (R): %s", log_packet);
 
-            //TODO: Check here if remote_ephemeral is already the same ephemeral key?
+            //TODO(goldroom): Check here if remote_ephemeral is already the same ephemeral key?
 
             /* e */
             memcpy(noise_handshake->remote_ephemeral, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
@@ -835,7 +833,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
 
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
-            //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
+            /* Cookie is verified later than in non-Noise handshake, but this should be acceptable */
             if (open_cookie(c->mem, c->mono_time, cookie_plain, handshake_payload_plain, c->cookie_symmetric_key) != 0) {
                 return false;
             }
@@ -848,11 +846,12 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             /* cookie necessary for Noise RESPONDER, used afterwards in create_send_handshake() */ 
             memcpy(peer_cookie, handshake_payload_plain + COOKIE_LENGTH, COOKIE_LENGTH);
             /* Noise: not necessary for Noise (=remote static), but necessary for friend_connection.c:handle_new_connections() */
-            //TODO: check for nullptr when called via handle_packet_crypto_hs() (not necessary there)?
-            memcpy(peer_id_public_key, noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE);
+            if (peer_id_public_key != nullptr) {
+                memcpy(peer_id_public_key, noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE);
+            }
             /* necessary */ 
             memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
-            //TODO: memzero packet, unwatend side effects? TODO: not possible currently because const
+            //TODO(goldroom): memzero packet, unwatend side effects? Currently not possible currently because const
             // crypto_memzero(packet, length);
 
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR);
@@ -915,7 +914,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
 
             crypto_memzero(noise_handshake_temp_key, CRYPTO_SHARED_KEY_SIZE);
 
-            //TODO: Send/Receive cookies again outside of handshake payload encryption? Late check here
+            /* Cookie is verified later than in non-Noise handshake, but this should be acceptable */
             if (open_cookie(c->mem, c->mono_time, cookie_plain, handshake_payload_plain, c->cookie_symmetric_key) != 0) {
                 return false;
             }
@@ -928,11 +927,10 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             /* necessary */
             memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
 
-            //TODO: memzero packet, unwanted side effects? TODO: not possible currently because const
+            //TODO(goldroom): memzero packet, unwanted side effects? Currently not possible currently because const
             // crypto_memzero(packet, length);
 
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER);
-
 
             LOGGER_DEBUG(c->log, "INITIATOR: END Noise HS handle/ReadMessage");
             return true;
@@ -979,7 +977,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
         memcpy(peer_id_public_key, cookie_plain, CRYPTO_PUBLIC_KEY_SIZE);
         memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
 
-        //TODO: memzero packet, unwatend side effects?
+        //TODO(goldroom): memzero packet, unwanted side effects? Currently not possible currently because const
         // crypto_memzero(packet, length);
 
         return true;
@@ -1527,15 +1525,14 @@ static int send_data_packet(const Net_Crypto *c, int crypt_connection_id, const 
     // bytes2string(nonce_print, sizeof(nonce_print), conn->sent_nonce, CRYPTO_NONCE_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
-    //TODO: len was const
+    //TODO(goldroom): const len when backwards compatiblity removed 
     int len = 0;
     if (conn->noise_handshake_enabled) { /* Case NoiseIK handshake */
-        //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
+        //TODO(goldroom): no data authenticated as AD (also none in WireGuard)
         len = encrypt_data_symmetric_xaead(conn->send_key, conn->send_nonce, data, length, packet + 1 + sizeof(uint16_t), nullptr, 0);
     } else { /* Case non-Noise handshake */
         len = encrypt_data_symmetric(c->mem, conn->shared_key, conn->send_nonce, data, length, packet + 1 + sizeof(uint16_t));
     }
-    
 
     if (len + 1 + sizeof(uint16_t) != packet_size) {
         LOGGER_ERROR(c->log, "encryption failed: %d", len);
@@ -1718,10 +1715,10 @@ static int handle_data_packet(const Net_Crypto *c, int crypt_connection_id, uint
     // bytes2string(nonce_print, sizeof(nonce_print), nonce, CRYPTO_NONCE_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "nonce: %s", nonce_print);
 
-    //TODO: len was const
+    //TODO(goldroom): const len when backwards compatiblity removed 
     int len = 0;
     if (conn->noise_handshake_enabled) { /* case NoiseIK handshake */
-        //TODO: add ad? only packet ID and last two bytes of nonce sent in plain
+        //TODO(goldroom): no data authenticated as AD (also none in WireGuard)
         len = decrypt_data_symmetric_xaead(conn->recv_key, nonce, packet + 1 + sizeof(uint16_t), length - (1 + sizeof(uint16_t)), data,
                     nullptr, 0);
     } else { /* case non-Noise handshake */
@@ -1947,7 +1944,7 @@ static int create_send_handshake(const Net_Crypto *c, int crypt_connection_id, c
             uint8_t handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR];
 
             if (create_crypto_handshake(c, handshake_packet, cookie, nullptr, conn->ephemeral_secret_key, conn->ephemeral_public_key,
-                                        conn->peer_id_public_key, dht_public_key, conn->noise_handshake) != sizeof(handshake_packet)) {
+                                        conn->noise_handshake->remote_static, dht_public_key, conn->noise_handshake) != sizeof(handshake_packet)) {
                 return -1;
             }
 
@@ -1958,7 +1955,7 @@ static int create_send_handshake(const Net_Crypto *c, int crypt_connection_id, c
             uint8_t handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER];
 
             if (create_crypto_handshake(c, handshake_packet, cookie, nullptr, conn->ephemeral_secret_key, conn->ephemeral_public_key,
-                                        conn->peer_id_public_key, dht_public_key, conn->noise_handshake) != sizeof(handshake_packet)) {
+                                        conn->noise_handshake->remote_static, dht_public_key, conn->noise_handshake) != sizeof(handshake_packet)) {
                 return -1;
             }
 
@@ -2059,7 +2056,7 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
 
     if (len <= (int)(sizeof(uint32_t) * 2)) {
         LOGGER_DEBUG(c->log, "connection_kill() because data packet decryption failure, crypt_connection_id: %d", crypt_connection_id);
-        //TODO: unwanted side effects? leave here?
+        //TODO(goldroom): unwanted side effects? leave here?
         connection_kill(c, crypt_connection_id, userdata);
         return -1;
     }
@@ -2119,7 +2116,12 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
         crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
         mem_delete(c->mem, conn->noise_handshake);
         conn->noise_handshake = nullptr;
-        //TODO: non-Noise: also crypto_memzero() values from conn?
+
+        /* also crypto_memzero() non-Noise values from crypto connection */ 
+        crypto_memzero(conn->ephemeral_secret_key, CRYPTO_SECRET_KEY_SIZE);
+        crypto_memzero(conn->ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+        crypto_memzero(conn->peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+        crypto_memzero(conn->peer_ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
         if (conn->connection_status_callback != nullptr) {
             conn->connection_status_callback(conn->connection_status_callback_object, conn->connection_status_callback_id,
@@ -2229,11 +2231,6 @@ static int handle_packet_cookie_response(const Net_Crypto *c, int crypt_connecti
     }
 
     if (number != conn->cookie_request_number) {
-        return -1;
-    }
-
-    /* Noise: only necessary if Cookie response was successful */ 
-    if (conn->noise_handshake_enabled && noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, conn->peer_id_public_key, true, nullptr, 0) != 0) {
         return -1;
     }
 
@@ -3026,6 +3023,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     }
 
     conn->connection_number_tcp = connection_number_tcp;
+    //TODO: Can this be removed?
     memcpy(conn->peer_id_public_key, real_public_key, CRYPTO_PUBLIC_KEY_SIZE);
     /* Base nonce is a counter in transport phase after Noise-based handshake */
     memset(conn->send_nonce, 0, CRYPTO_NONCE_SIZE);
@@ -3039,6 +3037,11 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     /* Necessary for backwards compatibility to switch to non-Noise handshake (only if enabled with option noise_compatibility_enabled) */
     conn->noise_handshake_enabled = true;
+
+    /* TODO(goldroom): Noise: only necessary if Cookie response was successful, but moved here to avoid saving peer_id_public_key twice (to remove it a some point from struct Crypto_Connection) */ 
+    if (conn->noise_handshake_enabled && noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, real_public_key, true, nullptr, 0) != 0) {
+        return -1;
+    }
 
     conn->cookie_request_number = random_u64(c->rng);
     uint8_t cookie_request[COOKIE_REQUEST_LENGTH];

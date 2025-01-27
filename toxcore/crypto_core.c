@@ -1062,7 +1062,7 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
  * @return 0 on success
  */
 int noise_handshake_init
-(Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length)
+(Noise_Handshake *noise_handshake, const uint8_t self_id_secret_key[CRYPTO_SECRET_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], bool initiator, const uint8_t *prologue, size_t prologue_length)
 {
     //TODO: remove
     // if (log != nullptr) {
@@ -1092,9 +1092,9 @@ int noise_handshake_init
 
     /* Sets the initiator, s => ephemeral keys are set afterwards */
     noise_handshake->initiator = initiator;
-    if (self_secret_key != nullptr) {
-        memcpy(noise_handshake->static_private, self_secret_key, CRYPTO_SECRET_KEY_SIZE);
-        crypto_derive_public_key(noise_handshake->static_public, self_secret_key);
+    if (self_id_secret_key != nullptr) {
+        memcpy(noise_handshake->static_private, self_id_secret_key, CRYPTO_SECRET_KEY_SIZE);
+        crypto_derive_public_key(noise_handshake->static_public, self_id_secret_key);
 
         //TODO: remove
         // if (log != nullptr) {
@@ -1110,8 +1110,8 @@ int noise_handshake_init
     }
     /* <- s: pre-message from responder to initiator => sets rs (only initiator) */
     if (initiator) {
-        if (peer_public_key != nullptr) {
-            memcpy(noise_handshake->remote_static, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+        if (peer_id_public_key != nullptr) {
+            memcpy(noise_handshake->remote_static, peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: Remove
             // if (log != nullptr) {
@@ -1121,7 +1121,7 @@ int noise_handshake_init
             // }
 
             /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
-            noise_mix_hash(noise_handshake->hash, peer_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            noise_mix_hash(noise_handshake->hash, peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: remove
             // if (log != nullptr) {

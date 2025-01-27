@@ -129,7 +129,6 @@ typedef struct Random {
 /** @brief Necessary NoiseIK handshake state information/values.
  */
 typedef struct Noise_Handshake {
-    // TODO: static_private?
     uint8_t static_private[CRYPTO_SECRET_KEY_SIZE];
     uint8_t static_public[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t ephemeral_private[CRYPTO_SECRET_KEY_SIZE];
@@ -137,7 +136,7 @@ typedef struct Noise_Handshake {
     uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
     //TODO(goldroom): precompute static static? cf. WireGuard struct noise_handshake
-    // uint8_t precomputed_static_static[CRYPTO_PUBLIC_KEY_SIZE];
+    // uint8_t precomputed_static_static[CRYPTO_SHARED_KEY_SIZE];
 
     uint8_t hash[CRYPTO_SHA512_SIZE];
     uint8_t chaining_key[CRYPTO_SHA512_SIZE];
@@ -668,8 +667,8 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  * Calls MixHash() once for each public key listed in the pre-messages.
  *
  * @param noise_handshake Noise handshake struct to save the necessary values to
- * @param self_secret_key static private ID X25519 key of this Tox instance
- * @param peer_public_key static public ID X25519 key from the peer to connect to
+ * @param self_id_secret_key static private ID X25519 key of this Tox instance
+ * @param peer_id_public_key static public ID X25519 key from the peer to connect to
  * @param initiator specifies if this Tox instance is the initiator of this crypto connection
  * @param prologue specifies the Noise prologue, used in call to MixHash(prologue) which maybe zero-length
  * @param prologue_length length of Noise prologue in bytes
@@ -679,7 +678,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  */
 non_null(1, 2) nullable(3, 5)
 int noise_handshake_init
-(Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
+(Noise_Handshake *noise_handshake, const uint8_t self_id_secret_key[CRYPTO_SECRET_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], bool initiator, const uint8_t *prologue, size_t prologue_length);
 //TODO: remove
 // int noise_handshake_init
 // (const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
