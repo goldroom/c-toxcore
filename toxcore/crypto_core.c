@@ -1052,8 +1052,8 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
  * Calls MixHash() once for each public key listed in the pre-messages.
  *
  * @param noise_handshake handshake struct to save the necessary values to
- * @param self_secret_key static private ID X25519 key of this Tox instance
- * @param peer_public_key static public ID X25519 key from peer to connect to
+ * @param self_id_secret_key static private ID X25519 key of this Tox instance
+ * @param peer_id_public_key static public ID X25519 key from peer to connect to
  * @param initiator specifies if this Tox instance is the initiator of this crypto connection
  * @param prologue specifies the Noise prologue, used in call to MixHash(prologue) which maybe zero-length
  * @param prologue_length length of Noise prologue in bytes
