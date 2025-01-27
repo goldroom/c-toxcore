@@ -931,7 +931,7 @@ static void test_noiseik(void)
     // printf("initiator_recv_key_print: %s\n", initiator_recv_key_print);
 
     uint8_t ciphertext4_transport1_initiator[sizeof(init_payload_transport1) + CRYPTO_MAC_SIZE];
-    uint8_t nonce_chacha20_ietf[CRYPTO_NOISEIK_NONCE_SIZE] = {0};
+    uint8_t nonce_chacha20_ietf[CRYPTO_NOISE_NONCE_SIZE] = {0};
     encrypt_data_symmetric_aead(initiator_send_key, nonce_chacha20_ietf, init_payload_transport1, sizeof(init_payload_transport1), ciphertext4_transport1_initiator, nullptr, 0);
     
     ck_assert_msg(memcmp(ciphertext4_transport1_initiator, init_payload_transport1_encrypted, sizeof(init_payload_transport1_encrypted)) == 0, "initiator transport1 ciphertext differ");

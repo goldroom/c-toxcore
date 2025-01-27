@@ -69,9 +69,9 @@ extern "C" {
 #define CRYPTO_NONCE_SIZE              24
 
 /**
- * @brief NoiseIK: The number of bytes in a nonce used for encryption/decryption (ChaChaPoly-1305-IETF).
+ * @brief NoiseIK: The number of bytes in a nonce used for encryption/decryption (ChaChaPoly1305-IETF).
  */
-#define CRYPTO_NOISEIK_NONCE_SIZE              12
+#define CRYPTO_NOISE_NONCE_SIZE              12
 
 /**
  * @brief The number of bytes in a SHA256 hash.
@@ -84,9 +84,9 @@ extern "C" {
 #define CRYPTO_SHA512_SIZE             64
 
 /**
- * @brief The number of bytes in a BLAKE2b-512 hash.
+ * @brief The number of bytes in a BLAKE2b-512 hash (as defined for Noise in section 12.8.).
  */
-#define CRYPTO_BLAKE2b_HASH_SIZE             64
+#define CRYPTO_NOISE_BLAKE2b_HASH_SIZE             64
 
 /**
  * @brief The number of bytes in a BLAKE2b block.
@@ -125,9 +125,8 @@ typedef struct Random {
     void *obj;
 } Random;
 
-// TODO: struct necessary?
-// TODO: move to crypto_core.h?
-/** @brief Necessary Noise handshake state information/values.
+// TODO(goldroom): struct necessary?
+/** @brief Necessary NoiseIK handshake state information/values.
  */
 typedef struct Noise_Handshake {
     // TODO: static_private?
@@ -548,7 +547,7 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
  * @brief Encrypt message with precomputed shared key using ChaCha20-Poly1305-IETF (RFC7539).
  *
  * Encrypts plain of plain_length to encrypted of plain_length + @ref CRYPTO_MAC_SIZE
- * using a shared key @ref CRYPTO_SYMMETRIC_KEY_SIZE big and a @ref CRYPTO_NOISEIK_NONCE_SIZE
+ * using a shared key @ref CRYPTO_SYMMETRIC_KEY_SIZE big and a @ref CRYPTO_NOISE_NONCE_SIZE
  * byte nonce. The encrypted message, as well as a tag authenticating both the confidential
  * message m and adlen bytes of non-confidential data ad, are put into encrypted.
  *
@@ -556,7 +555,7 @@ void new_hmac_key(const Random *rng, uint8_t key[CRYPTO_HMAC_KEY_SIZE]);
  * @return length of encrypted data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
+int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISE_NONCE_SIZE], const uint8_t *plain, size_t plain_length,
                                     uint8_t *encrypted, const uint8_t *ad, size_t ad_length);
 
 /**
@@ -564,13 +563,13 @@ int32_t encrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_S
  *
  * Decrypts encrypted of encrypted_length to plain of length
  * `length - CRYPTO_MAC_SIZE` using a shared key @ref CRYPTO_SHARED_KEY_SIZE
- * big and a @ref CRYPTO_NOISEIK_NONCE_SIZE byte nonce.
+ * big and a @ref CRYPTO_NOISE_NONCE_SIZE byte nonce.
  *
  * @retval -1 if there was a problem (decryption failed).
  * @return length of plain data if everything was fine.
  */
 non_null(1, 2, 3, 5) nullable(6)
-int32_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISEIK_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
+int32_t decrypt_data_symmetric_aead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NOISE_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
 /**
@@ -602,6 +601,7 @@ non_null(1, 2, 3, 5) nullable(6)
 int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
+//TODO(goldroom): remove, unused function
 /**
  * @brief Compute an HMAC-SHA512 authenticator (64 bytes).
  *
@@ -667,13 +667,12 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
  * Sets the initiator, s, e, rs, and re variables to the corresponding arguments.
  * Calls MixHash() once for each public key listed in the pre-messages.
  *
- * //TODO: remove Logger Param
- * @param noise_handshake handshake struct to save the necessary values to
+ * @param noise_handshake Noise handshake struct to save the necessary values to
  * @param self_secret_key static private ID X25519 key of this Tox instance
- * @param peer_public_key X25519 static ID public key from peer to connect to
+ * @param peer_public_key static public ID X25519 key from the peer to connect to
  * @param initiator specifies if this Tox instance is the initiator of this crypto connection
- * @param prologue specifies the prologue, used in call to MixHash(prologue) which maybe zero-length
- * @param prologue_length length of prologue in bytes
+ * @param prologue specifies the Noise prologue, used in call to MixHash(prologue) which maybe zero-length
+ * @param prologue_length length of Noise prologue in bytes
  *
  * @return -1 on failure
  * @return 0 on success
@@ -695,7 +694,7 @@ int noise_handshake_init
  * input_key_material = DH_X25519(private, public)
  *
  * @param chaining_key 64 byte Noise ck
- * @param shared_key 32 byte key to be calculated
+ * @param shared_key 32 byte secret key to be calculated
  * @param private_key X25519 private key
  * @param public_key X25519 public key
  */
