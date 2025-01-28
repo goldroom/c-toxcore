@@ -839,7 +839,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             }
 
             /* Compares static identity public keys from the peer */
-            if (expected_peer_id_pk != nullptr && !pk_equal(cookie_plain, expected_peer_id_pk)) {
+            if (!pk_equal(cookie_plain, noise_handshake->remote_static)) {
                 return false;
             }
 
@@ -851,8 +851,6 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             }
             /* necessary */ 
             memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
-            //TODO(goldroom): memzero packet, unwatend side effects? Currently not possible currently because const
-            // crypto_memzero(packet, length);
 
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR);
 
@@ -927,9 +925,6 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             /* necessary */
             memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
 
-            //TODO(goldroom): memzero packet, unwanted side effects? Currently not possible currently because const
-            // crypto_memzero(packet, length);
-
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER);
 
             LOGGER_DEBUG(c->log, "INITIATOR: END Noise HS handle/ReadMessage");
@@ -976,9 +971,6 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
         memcpy(peer_cookie, plain + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_SHA512_SIZE, COOKIE_LENGTH);
         memcpy(peer_id_public_key, cookie_plain, CRYPTO_PUBLIC_KEY_SIZE);
         memcpy(peer_dht_public_key, cookie_plain + CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
-
-        //TODO(goldroom): memzero packet, unwanted side effects? Currently not possible currently because const
-        // crypto_memzero(packet, length);
 
         return true;
     }
@@ -2296,11 +2288,13 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     /* necessary for Noise RESPONDER and non-Noise */ 
     uint8_t cookie[COOKIE_LENGTH];
 
+    //TODO: does this make sense this way?
     if (length != HANDSHAKE_PACKET_LENGTH) {
         conn->noise_handshake_enabled = true;
-        //TODO: Wipe noise_handshake etc. in this case?
     } else if (c->noise_compatibility_enabled) {
+        //TODO: Wipe noise_handshake etc. in this case?
         conn->noise_handshake_enabled = false;
+        /* Random nonce needed in non-Noise handshake */
         random_nonce(c->rng, conn->send_nonce);
     } else {
         return -1;
@@ -2311,20 +2305,23 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         if (conn->noise_handshake->initiator) {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
                 LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
-                //TODO: fails if peer receives two handshake packets.. check for send_key/recv_key?
+                //TODO(goldroom): fails if peer receives two handshake packets.. check for send_key/recv_key? 
+                //TODO(goldroom): Update 28.01.2025 not sure if that is still a problem, not happening in auto_tox_many_test
                 if (!handle_crypto_handshake(c, nullptr, nullptr, nullptr, dht_public_key, nullptr,
-                                             packet, length, conn->peer_id_public_key, conn->noise_handshake)) {
+                                             packet, length, nullptr, conn->noise_handshake)) {
                     return -1;
                 }
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
+                /* At least in auto tests this only happens for UDP connections */
                 LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGED TO RESPONDER");
                 if (noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
                 }
 
-                /* Noise: peer_real_pk (=conn->public_key) not necessary here, but for call in handle_new_connection_handshake()
+                /* Noise: peer_id_public_key (=conn->peer_id_public_key) not necessary for NoiseIK, but for call in handle_new_connection_handshake()
                     -> otherwise not working (call via friend_connection.c) */
-                if (!handle_crypto_handshake(c, nullptr, nullptr, conn->peer_id_public_key, dht_public_key, cookie,
+                //TODO: is this true in this case? => Removed from here, check if tests fail
+                if (!handle_crypto_handshake(c, nullptr, nullptr, nullptr, dht_public_key, cookie,
                                              packet, length, nullptr, conn->noise_handshake)) {
                     return -1;
                 }
@@ -2386,13 +2383,13 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         }
     }
 
-    //TODO: adapt for Noise, makes only sense for RESPONDER not initiator
+    //TODO: adapt for NoiseIK, makes only sense for RESPONDER not initiator
     if (pk_equal(dht_public_key, conn->peer_dht_public_key)) {
 
         LOGGER_DEBUG(c->log, "Crypto Conn Status: %d", conn->status);
 
         if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
-            LOGGER_DEBUG(c->log, "Noise handshake");
+            LOGGER_DEBUG(c->log, "Noise handshake: CRYPTO_CONN_NOT_CONFIRMED");
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
             if (conn->noise_handshake->initiator) {
                 //TODO: remove
@@ -2787,7 +2784,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     const int crypt_connection_id = getcryptconnection_id(c, n_c.peer_id_public_key);
 
     //TODO: This is only called if new_crypto_connection() was already called in the meantime! Now Noise RESPONDER!
-    //TODO: Does it make sense to handle this case for NoiseIK handshake?
+    //TODO: Does it make sense to handle this case for NoiseIK handshake? => yes, happens in auto_tox_many_test
     if (crypt_connection_id != -1) {
         LOGGER_DEBUG(c->log, "RESPONDER: CRYPTO CONN EXISTING");
         Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
@@ -3040,6 +3037,8 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     /* TODO(goldroom): Noise: only necessary if Cookie response was successful, but moved here to avoid saving peer_id_public_key twice (to remove it a some point from struct Crypto_Connection) */ 
     if (conn->noise_handshake_enabled && noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, real_public_key, true, nullptr, 0) != 0) {
+        kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
+        wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
 
@@ -3059,18 +3058,6 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     //TODO: remove
     // LOGGER_DEBUG(c->log, "AFTER: create_cookie_request()");
-
-    //TODO: here?
-    // only necessary if Cookie request was successful
-    // if (noise_handshake_init(c->log, conn->noise_handshake, c->self_secret_key, real_public_key, true) != 0) {
-    //     // crypto_memzero(conn->noise_handshake, sizeof(struct noise_handshake));
-    //    mem_delete(c->mem, conn->noise_handshake);
-    //     pthread_mutex_lock(&c->tcp_mutex);
-    //     kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
-    //     pthread_mutex_unlock(&c->tcp_mutex);
-    //     wipe_crypto_connection(c, crypt_connection_id);
-    //     return -1;
-    // }
 
     //TODO: remove
     LOGGER_DEBUG(c->log, "INITIATOR: END");
@@ -4075,7 +4062,8 @@ uint32_t crypto_run_interval(const Net_Crypto *c)
 /** Main loop. */
 void do_net_crypto(Net_Crypto *c, void *userdata)
 {
-    LOGGER_DEBUG(c->log, "do_net_crypto()");
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "do_net_crypto()");
     //TODO: update cookie symmetric key every ~2 minutes (cf. WireGuard)?
     kill_timedout(c, userdata);
     do_tcp(c, userdata);
