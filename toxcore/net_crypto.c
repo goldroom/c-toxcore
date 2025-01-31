@@ -524,8 +524,8 @@ static void bytes2string(char *string, size_t string_length, const uint8_t *byte
  * @param peer_cookie must be COOKIE_LENGTH bytes. Cookie received from the peer.
  * @param packet must be of size HANDSHAKE_PACKET_LENGTH or bigger.
  * @param send_nonce base nonce for this Tox instance, to be used for transport message encryption after non-Noise handshake
- * @param ephemeral_private_key Ephemeral private X25519 key of this Tox instance for this handshake
- * @param ephemeral_public_key Ephemeral public X25519 key of this Tox instance for this handshake
+ * @param ephemeral_private_key Ephemeral private X25519 key of this non-Noise handshake
+ * @param ephemeral_public_key Ephemeral public X25519 key of this non-Noise handshake
  * @param peer_id_public_key X25519 static ID public key from peer to connect to
  * @param peer_dht_public_key X25519 DHT public key from peer to connect to
  * @param noise_handshake struct containing Noise information/values
@@ -536,7 +536,7 @@ static void bytes2string(char *string, size_t string_length, const uint8_t *byte
  * @retval NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER if Noise handshake responder
  *
  */
-non_null(1, 2, 3, 6, 7, 8) nullable(4, 5, 9)
+non_null(1, 2, 3, 8) nullable(4, 5, 6, 7, 9)
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t peer_cookie[COOKIE_LENGTH], const uint8_t send_nonce[CRYPTO_NONCE_SIZE], const uint8_t ephemeral_private_key[CRYPTO_SECRET_KEY_SIZE],
                                    const uint8_t ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], const uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE], Noise_Handshake *noise_handshake)
 {
@@ -561,13 +561,12 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             */
         if (noise_handshake->initiator) {
             LOGGER_DEBUG(c->log, "INITIATOR");
-            /* set ephemeral private+public */
-            memcpy(noise_handshake->ephemeral_private, ephemeral_private_key, CRYPTO_SECRET_KEY_SIZE);
-            memcpy(noise_handshake->ephemeral_public, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            /* Noise: create and set ephemeral private+public */
+            crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
             /* e */
-            memcpy(packet + 1, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-            noise_mix_hash(noise_handshake->hash, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            memcpy(packet + 1, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+            noise_mix_hash(noise_handshake->hash, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: remove from production code
             // char log_hash1[CRYPTO_SHA512_SIZE*2+1];
@@ -576,7 +575,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
             /* es */
             uint8_t noise_handshake_temp_key[CRYPTO_SHARED_KEY_SIZE];
-            noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, ephemeral_private_key, noise_handshake->remote_static);
+            noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->ephemeral_private, noise_handshake->remote_static);
 
             /* s */
             /* Nonce for static pub key encryption is _always_ 0 in case of ChaCha20-Poly1305 */
@@ -648,13 +647,12 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             => 161 bytes in total
             */
         else {
-            /* set ephemeral private+public */
-            memcpy(noise_handshake->ephemeral_private, ephemeral_private_key, CRYPTO_SECRET_KEY_SIZE);
-            memcpy(noise_handshake->ephemeral_public, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            /* Noise: create and set ephemeral private+public */
+            crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
             /* e */
-            memcpy(packet + 1, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-            noise_mix_hash(noise_handshake->hash, ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            memcpy(packet + 1, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
+            noise_mix_hash(noise_handshake->hash, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
 
             //TODO: Remove
             // char log_ck[CRYPTO_SHA512_SIZE*2+1];
@@ -663,7 +661,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
 
             /* ee */
             uint8_t noise_handshake_temp_key[CRYPTO_SHARED_KEY_SIZE];
-            noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, ephemeral_private_key, noise_handshake->remote_ephemeral);
+            noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->ephemeral_private, noise_handshake->remote_ephemeral);
 
             //TODO: Remove
             // char log_temp_key[CRYPTO_SHARED_KEY_SIZE*2+1];
@@ -1928,11 +1926,10 @@ static int create_send_handshake(const Net_Crypto *c, int crypt_connection_id, c
         return -1;
     }
 
-    LOGGER_DEBUG(c->log, "conn->noise_handshake->initiator: %d", conn->noise_handshake->initiator);
-
     /* Noise-based handshake */
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
         LOGGER_DEBUG(c->log, "NoiseIK handshake");
+        LOGGER_DEBUG(c->log, "conn->noise_handshake->initiator: %d", conn->noise_handshake->initiator);
         if (conn->noise_handshake->initiator) {
             uint8_t handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR];
 
@@ -2293,11 +2290,16 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
 
     /* necessary for compatiblity to non-Noise */
     if (length == HANDSHAKE_PACKET_LENGTH && c->noise_compatibility_enabled) {
-        /* non-Noise: noise_handshake not necessary anymore => memzero and free */
-        crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
-        mem_delete(c->mem, conn->noise_handshake);
-        conn->noise_handshake = nullptr;
+        if (conn->noise_handshake != nullptr) {
+            /* non-Noise: noise_handshake not necessary anymore => memzero and free */
+            crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
+            mem_delete(c->mem, conn->noise_handshake);
+            conn->noise_handshake = nullptr;
+        }
+
         conn->noise_handshake_enabled = false;
+        /* Ephemeral key pair needed in non-Noise handshake */
+        crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
         /* Random nonce needed in non-Noise handshake */
         random_nonce(c->rng, conn->send_nonce);
     }
@@ -2349,6 +2351,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         //TODO: Differentiate between change and not change? if not changed, no call to noise_handshake_init() necessary => TODO: need info in conn or noise_handshake
         //TODO: Or add new connection state?
         /* Case where RESPONDER with and without change from INITIATOR */
+        //TODO: I think this cannot happen
         else {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "RESPONDER: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
@@ -2922,11 +2925,6 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
             //NOT possible here, need content afterwards!
             // crypto_memzero(n_c->noise_handshake, sizeof(struct noise_handshake));
 
-            //TODO: only necessary if NoiseIK handshake finished
-            memset(conn->send_nonce, 0, CRYPTO_NONCE_SIZE);
-            //TODO: why did I move that here?
-            crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
-
             /* IMPORTANT: in this case here/before create_send_handshake(), otherwise get_crypto_connection() in
             create_send_handshake() returns a nullptr */
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
@@ -2937,6 +2935,9 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
                 return -1;
             }
 
+            /* NoiseIK handshake finished */
+            memset(conn->send_nonce, 0, CRYPTO_NONCE_SIZE);
+            memset(conn->recv_nonce, 0, CRYPTO_NONCE_SIZE);
             /* Noise Split(), base nonces already set */
             crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
 
@@ -3027,11 +3028,12 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->connection_number_tcp = connection_number_tcp;
     /* Necessary for backwards compatibility to switch to non-Noise handshake */
     memcpy(conn->peer_id_public_key, real_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-    /* Base nonce is a counter in transport phase after Noise-based handshake */
-    //TODO: only necessary if handshake finished
+
+    /* Base nonces are a counter in transport phase after NoiseIK handshake */
+    /* Only necessary after handshake is finished, but would need to set in multiple different places */
     memset(conn->send_nonce, 0, CRYPTO_NONCE_SIZE);
-    //TODO: move to create_send_handshake?
-    crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
+    memset(conn->recv_nonce, 0, CRYPTO_NONCE_SIZE);
+    
     conn->status = CRYPTO_CONN_COOKIE_REQUESTING;
     conn->packet_send_rate = CRYPTO_PACKET_MIN_RATE;
     conn->packet_send_rate_requested = CRYPTO_PACKET_MIN_RATE;
