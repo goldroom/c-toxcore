@@ -1069,9 +1069,6 @@ int noise_handshake_init
     //     LOGGER_DEBUG(log, "ENTERING");
     // }
 
-    //TODO(goldroom): move to handle_packet_crypto_hs()?
-    crypto_memzero(noise_handshake, sizeof(Noise_Handshake));
-
     /* IntializeSymmetric(protocol_name) => set h to NOISE_PROTOCOL_NAME and append zero bytes to make 64 bytes, sets ck = h
      Nothing gets hashed in Tox case because NOISE_PROTOCOL_NAME < CRYPTO_SHA512_SIZE */
     uint8_t temp_hash[CRYPTO_NOISE_BLAKE2b_HASH_SIZE];
