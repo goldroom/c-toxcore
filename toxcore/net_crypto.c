@@ -367,7 +367,7 @@ non_null()
 static int handle_cookie_request(const Net_Crypto *c, uint8_t *request_plain, uint8_t *shared_key,
                                  uint8_t *dht_public_key, const uint8_t *packet, uint16_t length)
 {
-    LOGGER_DEBUG(c->log, "ENTERING");
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d", packet[0], length);
     if (length != COOKIE_REQUEST_LENGTH) {
         return -1;
     }
@@ -394,7 +394,7 @@ static int udp_handle_cookie_request(void *object, const IP_Port *source, const 
     const Net_Crypto *c = (const Net_Crypto *)object;
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d", packet[0], length);
 
     uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
@@ -422,7 +422,7 @@ non_null()
 static int tcp_handle_cookie_request(const Net_Crypto *c, int connections_number, const uint8_t *packet,
                                      uint16_t length)
 {
-    LOGGER_DEBUG(c->log, "ENTERING");
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d", packet[0], length);
     uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE];
@@ -446,7 +446,7 @@ non_null()
 static int tcp_oob_handle_cookie_request(const Net_Crypto *c, unsigned int tcp_connections_number,
         const uint8_t *dht_public_key, const uint8_t *packet, uint16_t length)
 {
-    LOGGER_DEBUG(c->log, "ENTERING");
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d", packet[0], length);
     uint8_t request_plain[COOKIE_REQUEST_PLAIN_LENGTH];
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
     uint8_t dht_public_key_temp[CRYPTO_PUBLIC_KEY_SIZE];
@@ -540,10 +540,13 @@ non_null(1, 2, 3, 8) nullable(4, 5, 6, 7, 9)
 static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const uint8_t peer_cookie[COOKIE_LENGTH], const uint8_t send_nonce[CRYPTO_NONCE_SIZE], const uint8_t ephemeral_private_key[CRYPTO_SECRET_KEY_SIZE],
                                    const uint8_t ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], const uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE], Noise_Handshake *noise_handshake)
 {
-    LOGGER_DEBUG(c->log, "ENTERING: create_crypto_handshake()");
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "ENTERING: create_crypto_handshake()");
     /* Noise-based handshake */
     if (noise_handshake != nullptr) {
-        LOGGER_DEBUG(c->log, "Noise Handshake");
+        //TODO: remove
+        // LOGGER_DEBUG(c->log, "Noise Handshake");
+
         /* Noise INITIATOR: -> e, es, s, ss */
         /* Initiator: Handshake packet structure (Noise_IK_25519_ChaChaPoly_BLAKE2b)
             [uint8_t 26]
@@ -560,7 +563,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             => 321 bytes in total
             */
         if (noise_handshake->initiator) {
-            LOGGER_DEBUG(c->log, "INITIATOR");
+            LOGGER_DEBUG(c->log, "Noise: INITIATOR");
             /* Noise: create and set ephemeral private+public */
             crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
@@ -586,9 +589,9 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             // char log_hash2[CRYPTO_SHA512_SIZE*2+1];
             // bytes2string(log_hash2, sizeof(log_hash2), noise_handshake->hash, CRYPTO_SHA512_SIZE, c->log);
             // LOGGER_DEBUG(c->log, "hash2 INITIATOR: %s", log_hash2);
-            char log_ephemeral[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-            bytes2string(log_ephemeral, sizeof(log_ephemeral), noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE, c->log);
-            LOGGER_DEBUG(c->log, "ephemeral public: %s", log_ephemeral);
+            // char log_ephemeral[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
+            // bytes2string(log_ephemeral, sizeof(log_ephemeral), noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE, c->log);
+            // LOGGER_DEBUG(c->log, "ephemeral public: %s", log_ephemeral);
 
             /* ss */
             noise_mix_key(noise_handshake->chaining_key, noise_handshake_temp_key, noise_handshake->static_private, noise_handshake->remote_static);
@@ -647,6 +650,7 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             => 161 bytes in total
             */
         else {
+            LOGGER_DEBUG(c->log, "Noise: RESPONDER");
             /* Noise: create and set ephemeral private+public */
             crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
@@ -747,10 +751,11 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
                                     uint8_t peer_dht_public_key[CRYPTO_PUBLIC_KEY_SIZE], uint8_t peer_cookie[COOKIE_LENGTH], const uint8_t *packet, uint16_t packet_length, const uint8_t expected_peer_id_pk[CRYPTO_PUBLIC_KEY_SIZE],
                                     Noise_Handshake *noise_handshake)
 {
-    LOGGER_DEBUG(c->log, "ENTERING");
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "ENTERING");
     /* Noise-based handshake */
     if (noise_handshake != nullptr) {
-        LOGGER_DEBUG(c->log, "NOISE handshake => INITIATOR or RESPONDER: %d", noise_handshake->initiator);
+        LOGGER_DEBUG(c->log, "noise_handshake->initiator: %d", noise_handshake->initiator);
 
         uint8_t cookie_plain[COOKIE_DATA_LENGTH];
 
@@ -770,10 +775,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             => 321 bytes in total
             */
         if (!noise_handshake->initiator) {
-            LOGGER_DEBUG(c->log, "RESPONDER: Noise HS handle/ReadMessage");
-            if (packet_length != NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
-                return false;
-            }
+            //TODO: remove
+            // LOGGER_DEBUG(c->log, "RESPONDER: Noise HS handle/ReadMessage");
 
             //TODO: remove from production code
             // char log_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR*2+1];
@@ -853,7 +856,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
 
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_INITIATOR);
 
-            LOGGER_DEBUG(c->log, "RESPONDER: END Noise HS handle/ReadMessage");
+            //TODO: remove
+            // LOGGER_DEBUG(c->log, "RESPONDER: END Noise HS handle/ReadMessage");
             return true;
         }
         /* Noise ReadMessage() if initiator:  <- e, ee, se */
@@ -869,11 +873,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             => 161 bytes in total
             */
         else {
-            LOGGER_DEBUG(c->log, "INITIATOR: Noise HS handle/ReadMessage");
-
-            if (packet_length != NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
-                return false;
-            }
+            //TODO: remove
+            // LOGGER_DEBUG(c->log, "INITIATOR: Noise HS handle/ReadMessage");
 
             memcpy(noise_handshake->remote_ephemeral, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
             noise_mix_hash(noise_handshake->hash, noise_handshake->remote_ephemeral, CRYPTO_PUBLIC_KEY_SIZE);
@@ -926,7 +927,8 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
 
             crypto_memzero(handshake_payload_plain, NOISE_HANDSHAKE_PAYLOAD_PLAIN_LENGTH_RESPONDER);
 
-            LOGGER_DEBUG(c->log, "INITIATOR: END Noise HS handle/ReadMessage");
+            //TODO: remove
+            // LOGGER_DEBUG(c->log, "INITIATOR: END Noise HS handle/ReadMessage");
             return true;
         }
     }
@@ -1916,7 +1918,8 @@ non_null()
 static int create_send_handshake(const Net_Crypto *c, int crypt_connection_id, const uint8_t *cookie,
                                  const uint8_t *dht_public_key)
 {
-    LOGGER_DEBUG(c->log, "ENTERING");
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     const Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
@@ -1928,7 +1931,6 @@ static int create_send_handshake(const Net_Crypto *c, int crypt_connection_id, c
 
     /* Noise-based handshake */
     if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
-        LOGGER_DEBUG(c->log, "NoiseIK handshake");
         LOGGER_DEBUG(c->log, "conn->noise_handshake->initiator: %d", conn->noise_handshake->initiator);
         if (conn->noise_handshake->initiator) {
             uint8_t handshake_packet[NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR];
@@ -2029,7 +2031,8 @@ non_null(1, 3) nullable(6)
 static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const uint8_t *packet, uint16_t length,
                                    bool udp, void *userdata)
 {
-    LOGGER_DEBUG(c->log, "ENTERING: PACKET: %d", packet[0]);
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "ENTERING: PACKET: %d", packet[0]);
 
     if (length > MAX_CRYPTO_PACKET_SIZE || length <= CRYPTO_DATA_PACKET_MIN_SIZE) {
         return -1;
@@ -2045,9 +2048,10 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
     const int len = handle_data_packet(c, crypt_connection_id, data, packet, length);
 
     if (len <= (int)(sizeof(uint32_t) * 2)) {
-        LOGGER_DEBUG(c->log, "connection_kill() -> data packet decryption failure in crypt_connection_id: %d", crypt_connection_id);
-        //TODO(goldroom): unwanted side effects? leave here?
-        connection_kill(c, crypt_connection_id, userdata);
+        LOGGER_DEBUG(c->log, "decryption failure/crypt_connection_id: %d/conn->status: %d", crypt_connection_id, conn->status);
+        //TODO(goldroom): unwanted side effects? => yes, kills connection if new handshake before timeout
+        //TODO: maybe this was better? Connections now slower?
+        // connection_kill(c, crypt_connection_id, userdata);
         return -1;
     }
 
@@ -2091,7 +2095,7 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
     // LOGGER_DEBUG(c->log, "DATA ID after PADDING: %d", real_data[0]);
 
     if (real_data[0] == PACKET_ID_KILL) {
-        LOGGER_DEBUG(c->log, "KILL PACKET RECEIVED");
+        LOGGER_DEBUG(c->log, "KILL PACKET RECEIVED crypt_connection_id: %d/conn->status: %d", crypt_connection_id, conn->status);
         connection_kill(c, crypt_connection_id, userdata);
         return 0;
     }
@@ -2100,11 +2104,12 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
         clear_temp_packet(c, crypt_connection_id);
         conn->status = CRYPTO_CONN_ESTABLISHED;
 
-        LOGGER_DEBUG(c->log, "CRYPTO_CONN_ESTABLISHED->crypt_connection_id: %d", crypt_connection_id);
+        LOGGER_DEBUG(c->log, "CRYPTO_CONN_ESTABLISHED crypt_connection_id: %d/conn->status: %d", crypt_connection_id, conn->status);
 
         /* Noise: noise_handshake not necessary anymore => memzero and free */
         if (conn->noise_handshake != nullptr) {
             crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
+            //TODO: remove? leads to nullptr in handle_new_connection_handshake()?
             mem_delete(c->mem, conn->noise_handshake);
             conn->noise_handshake = nullptr;
         }
@@ -2206,10 +2211,8 @@ static int handle_packet_cookie_response(const Net_Crypto *c, int crypt_connecti
         return -1;
     }
 
-    LOGGER_DEBUG(c->log, "ENTERING: crypto_connection_id: %d => PACKET: %d => CRYPTO CONN STATE: %d",
-                 crypt_connection_id,
-                 packet[0],
-                 conn->status);
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d/crypto_connection_id: %d/conn->status: %d",
+                 packet[0], length, crypt_connection_id, conn->status);
 
     if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING) {
         return -1;
@@ -2266,10 +2269,8 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         return -1;
     }
 
-    LOGGER_DEBUG(c->log, "ENTERING: crypt_connection_id: %d | PACKET: %d | CRYPTO CONN STATE: %d",
-                 crypt_connection_id,
-                 packet[0],
-                 conn->status);
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d/crypt_connection_id: %d/conn->status: %d",
+                 packet[0], length, crypt_connection_id, conn->status);
 
     if (conn->noise_handshake != nullptr) {
         //TODO(goldroom): removed CRYPTO_CONN_NOT_CONFIRMED -> test for possible side effects
@@ -2300,28 +2301,28 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             mem_delete(c->mem, conn->noise_handshake);
             conn->noise_handshake = nullptr;
         }
-
         conn->noise_handshake_enabled = false;
         /* Ephemeral key pair needed in non-Noise handshake */
         crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
         /* Random nonce needed in non-Noise handshake */
         random_nonce(c->rng, conn->send_nonce);
+        LOGGER_DEBUG(c->log, "Switch to non-Noise handshake");
     }
 
     if (conn->noise_handshake_enabled) {
-        LOGGER_DEBUG(c->log, "Noise handshake");
+        LOGGER_DEBUG(c->log, "conn->noise_handshake->initiator: %d", conn->noise_handshake->initiator);
         if (conn->noise_handshake == nullptr) { //TODO(goldroom): Is this check necessary?
             return -1;
         }
         if (conn->noise_handshake->initiator) {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
-                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
+                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> normal");
                 if (!handle_crypto_handshake(c, nullptr, nullptr, nullptr, dht_public_key, nullptr,
                                              packet, length, nullptr, conn->noise_handshake)) {
                     return -1;
                 }
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) { /* At least in auto tests this only happens for UDP connections */
-                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGED TO RESPONDER");
+                LOGGER_DEBUG(c->log, "INITIATOR: Noise handshake -> CHANGE TO RESPONDER");
                 crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
                 if (noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
@@ -2372,6 +2373,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 //TODO: here?
                 conn->status = CRYPTO_CONN_HANDSHAKE_SENT;
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
+                //TODO: Does this even happen?
                 LOGGER_DEBUG(c->log, "RESPONDER: NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
                 /* cannot chagne to INITIATOR here, connection broken */
                 //TODO: leave here?
@@ -2393,12 +2395,9 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
 
     //TODO: adapt for NoiseIK, makes only sense for RESPONDER not initiator
     if (pk_equal(dht_public_key, conn->peer_dht_public_key)) {
-
-        LOGGER_DEBUG(c->log, "Crypto Conn Status: %d", conn->status);
-
         if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
-            LOGGER_DEBUG(c->log, "Noise handshake: CRYPTO_CONN_NOT_CONFIRMED");
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
+            LOGGER_DEBUG(c->log, "conn->status: set to CRYPTO_CONN_NOT_CONFIRMED (%d)", conn->status);
             if (conn->noise_handshake->initiator) {
                 //TODO: remove
                 // char ck_print[CRYPTO_SHA512_SIZE*2+1];
@@ -2458,9 +2457,8 @@ static int handle_packet_crypto_data(Net_Crypto *c, int crypt_connection_id, con
     }
 
     //TODO: remove from prod code
-    LOGGER_DEBUG(c->log, "ENTERING: PACKET: %d | CRYPTO CONN STATE: %d",
-                 packet[0],
-                 conn->status);
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d/crypt_connection_id: %d/conn->status: %d",
+                 packet[0], length, crypt_connection_id, conn->status);
 
 
     if (conn->status != CRYPTO_CONN_NOT_CONFIRMED && conn->status != CRYPTO_CONN_ESTABLISHED) {
@@ -2480,7 +2478,7 @@ static int handle_packet_connection(Net_Crypto *c, int crypt_connection_id, cons
                                     bool udp, void *userdata)
 {
     //TODO: remove from prod code
-    LOGGER_DEBUG(c->log, "ENTERING: PACKET: %d", packet[0]);
+    // LOGGER_DEBUG(c->log, "ENTERING: PACKET: %d", packet[0]);
 
     if (length == 0 || length > MAX_CRYPTO_PACKET_SIZE) {
         return -1;
@@ -2551,7 +2549,7 @@ static int create_crypto_connection(Net_Crypto *c)
         if (c->crypto_connections[i].status == CRYPTO_CONN_FREE) {
             id = i;
             //TODO: remove
-            LOGGER_DEBUG(c->log, "NO realloc");
+            // LOGGER_DEBUG(c->log, "NO realloc");
             break;
         }
     }
@@ -2562,7 +2560,7 @@ static int create_crypto_connection(Net_Crypto *c)
             ++c->crypto_connections_length;
             c->crypto_connections[id] = empty_crypto_connection;
             //TODO: remove
-            LOGGER_DEBUG(c->log, "DONE realloc");
+            // LOGGER_DEBUG(c->log, "DONE realloc");
         }
     }
 
@@ -2616,11 +2614,13 @@ static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
         return -1;
     }
 
-    LOGGER_DEBUG(c->log, "valid id provided, free()'ing");
+    //TODO: remove
+    // LOGGER_DEBUG(c->log, "valid id provided, free()'ing");
 
     uint32_t i;
 
-    /* Noise: necessary for backwards compatibility and because after CRYPTO_CONN_ESTABLISHED noise_handshake is already memzeroed/freed */
+    /* NoiseIK: necessary for backwards compatibility and because after CRYPTO_CONN_ESTABLISHED noise_handshake is already memzeroed/freed */
+    //TODO(goldroom): refactor if backwards compatiblity removed
     if (c->crypto_connections[crypt_connection_id].noise_handshake != nullptr) {
         crypto_memzero(c->crypto_connections[crypt_connection_id].noise_handshake, sizeof(Noise_Handshake));
         mem_delete(c->mem, c->crypto_connections[crypt_connection_id].noise_handshake);
@@ -2729,7 +2729,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         void *userdata)
 {
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     uint8_t *cookie = (uint8_t *)mem_balloc(c->mem, COOKIE_LENGTH);
 
@@ -2755,7 +2755,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         }
 
         //TODO: remove
-        LOGGER_DEBUG(c->log, "RESPONDER: After Handshake init");
+        LOGGER_DEBUG(c->log, "Noise RESPONDER: After Handshake init");
 
         /* Noise: peer_real_pk (=n_c.public_key) not necessary for Noise, but need to include -> otherwise not working (call via friend_connection.c) */ 
         //TODO: adapt peer_real_pk (=n_c.public_key) for Noise?
@@ -2804,7 +2804,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         if (!pk_equal(n_c.peer_dht_public_key, conn->peer_dht_public_key)) {
             connection_kill(c, crypt_connection_id, userdata);
         } else  if(length != HANDSHAKE_PACKET_LENGTH) { /* case NoiseIK handshake */
-            LOGGER_DEBUG(c->log, "Noise handshake");
+            //TODO: remove
+            // LOGGER_DEBUG(c->log, "Noise handshake");
             if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
                 mem_delete(c->mem, n_c.peer_cookie);
                 return -1;
@@ -2825,7 +2826,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             /* RESPONDER Noise Split(): vice-verse keys in comparison to initiator */
             crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
             //TODO: remove
-            LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
+            LOGGER_DEBUG(c->log, "Noise RESPONDER crypt_connection_id: %d/conn->status: %d", crypt_connection_id, conn->status);
 
             crypto_memzero(n_c.noise_handshake, sizeof(Noise_Handshake));
             n_c.noise_handshake = nullptr;
@@ -2837,10 +2838,24 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         else { 
             LOGGER_DEBUG(c->log, "non-Noise handshake");
             conn->noise_handshake_enabled = false;
-            if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
-                mem_delete(c->mem, n_c.peer_cookie);
-                return -1;
-            }
+            //TODO: need to do the same here as in handle_crypto_hs() to switch? otherwise still think this is a Noise connection? (toxic_01022025_4.log)
+            //TODO: not sure if that fixed something, connections taking way longer now in toxic
+            // if (conn->noise_handshake != nullptr) {
+            //     /* non-Noise: noise_handshake not necessary anymore => memzero and free */
+            //     crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
+            //     mem_delete(c->mem, conn->noise_handshake);
+            //     conn->noise_handshake = nullptr;
+            // }
+            // conn->noise_handshake_enabled = false;
+            // /* Ephemeral key pair needed in non-Noise handshake */
+            // crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
+            // /* Random nonce needed in non-Noise handshake */
+            // random_nonce(c->rng, conn->send_nonce);
+            // LOGGER_DEBUG(c->log, "Switch to non-Noise handshake");
+            // if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
+            //     mem_delete(c->mem, n_c.peer_cookie);
+            //     return -1;
+            // }
 
             memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
             memcpy(conn->peer_ephemeral_public_key, n_c.peer_ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
@@ -2875,7 +2890,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 {
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     if (getcryptconnection_id(c, n_c->peer_id_public_key) != -1) {
         //TODO: remove
@@ -2887,7 +2902,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 
     //TODO: remove
     //TODO: Print pub key of peer?
-    LOGGER_DEBUG(c->log, "RESPONDER: AFTER: create_crypto_connection() => crypt_connection_id: %d", crypt_connection_id);
+    LOGGER_DEBUG(c->log, "RESPONDER: AFTER create_crypto_connection() => crypt_connection_id: %d", crypt_connection_id);
 
     if (crypt_connection_id == -1) {
         LOGGER_ERROR(c->log, "Could not create new crypto connection");
@@ -2915,7 +2930,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
         if (!n_c->noise_handshake->initiator) {
             conn->noise_handshake_enabled = true;
             //TODO: remove
-            LOGGER_DEBUG(c->log, "Responder: Noise handshake -> Noise WriteMessage");
+            LOGGER_DEBUG(c->log, "Responder: Noise WriteMessage");
             memcpy(conn->noise_handshake, n_c->noise_handshake, sizeof(Noise_Handshake));
 
             //NOT possible here, need content afterwards!
@@ -2938,7 +2953,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
             crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
 
             //TODO: remove
-            LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
+            LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()/conn->status: %d", conn->status);
             //TODO: here correct?
             crypto_memzero(n_c->noise_handshake, sizeof(Noise_Handshake));
         } else {
@@ -2993,7 +3008,7 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
 int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const uint8_t *dht_public_key)
 {
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     int crypt_connection_id = getcryptconnection_id(c, real_public_key);
 
@@ -3108,9 +3123,6 @@ static int tcp_data_callback(void *object, int crypt_connection_id, const uint8_
 {
     Net_Crypto *c = (Net_Crypto *)object;
 
-    //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", packet[0]);
-
     if (length == 0 || length > MAX_CRYPTO_PACKET_SIZE) {
         return -1;
     }
@@ -3120,6 +3132,10 @@ static int tcp_data_callback(void *object, int crypt_connection_id, const uint8_
     if (conn == nullptr) {
         return -1;
     }
+
+    //TODO: remove
+    LOGGER_DEBUG(c->log, "Packet ID: %d/length: %d/crypt_connection_id: %d/conn->status: %d", 
+        packet[0], length, crypt_connection_id, conn->status);
 
     if (packet[0] == NET_PACKET_COOKIE_REQUEST) {
         return tcp_handle_cookie_request(c, conn->connection_number_tcp, packet, length);
@@ -3142,7 +3158,7 @@ static int tcp_oob_callback(void *object, const uint8_t *public_key, unsigned in
     Net_Crypto *c = (Net_Crypto *)object;
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", packet[0]);
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d", packet[0], length);
 
     if (length == 0 || length > MAX_CRYPTO_PACKET_SIZE) {
         return -1;
@@ -3330,7 +3346,7 @@ int connection_data_handler(const Net_Crypto *c, int crypt_connection_id,
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     if (conn == nullptr) {
         return -1;
@@ -3357,7 +3373,7 @@ int connection_lossy_data_handler(const Net_Crypto *c, int crypt_connection_id,
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
     //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING");
+    // LOGGER_DEBUG(c->log, "ENTERING");
 
     if (conn == nullptr) {
         return -1;
@@ -3423,14 +3439,14 @@ static int udp_handle_packet(void *object, const IP_Port *source, const uint8_t 
 {
     Net_Crypto *c = (Net_Crypto *)object;
 
-    //TODO: remove
-    LOGGER_DEBUG(c->log, "ENTERING => PACKET: %d", packet[0]);
-
     if (length <= CRYPTO_MIN_PACKET_SIZE || length > MAX_CRYPTO_PACKET_SIZE) {
         return 1;
     }
 
     const int crypt_connection_id = crypto_id_ip_port(c, source);
+
+    //TODO: remove
+    LOGGER_DEBUG(c->log, "Packet ID: %d/length: %d/crypt_connection_id: %d", packet[0], length, crypt_connection_id);
 
     /* No crypto connection yet = RESPONDER case */
     if (crypt_connection_id == -1) {
@@ -3898,7 +3914,7 @@ int crypto_kill(Net_Crypto *c, int crypt_connection_id)
 {
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
-    LOGGER_DEBUG(c->log, "ENTERING: crypto conn: %d", crypt_connection_id);
+    LOGGER_DEBUG(c->log, "crypt_connection_id: %d", crypt_connection_id);
 
     int ret = -1;
 
