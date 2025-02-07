@@ -2110,8 +2110,8 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
         if (conn->noise_handshake != nullptr) {
             crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
             //TODO: remove? leads to nullptr in handle_new_connection_handshake()?
-            mem_delete(c->mem, conn->noise_handshake);
-            conn->noise_handshake = nullptr;
+            // mem_delete(c->mem, conn->noise_handshake);
+            // conn->noise_handshake = nullptr;
         }
 
         /* also crypto_memzero() non-Noise values from crypto connection */ 
@@ -2211,7 +2211,7 @@ static int handle_packet_cookie_response(const Net_Crypto *c, int crypt_connecti
         return -1;
     }
 
-    LOGGER_DEBUG(c->log, "Packet: %d/length: %d/crypto_connection_id: %d/conn->status: %d",
+    LOGGER_DEBUG(c->log, "Packet: %d/length: %d/crypt_connection_id: %d/conn->status: %d",
                  packet[0], length, crypt_connection_id, conn->status);
 
     if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING) {
@@ -2294,7 +2294,8 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     uint8_t cookie[COOKIE_LENGTH];
 
     /* necessary for compatiblity to non-Noise */
-    if (length == HANDSHAKE_PACKET_LENGTH && c->noise_compatibility_enabled) {
+    //TODO: check for conn->noise_handshake_enabled => to not switch again after handle_new_connection_handshake()
+    if (length == HANDSHAKE_PACKET_LENGTH && c->noise_compatibility_enabled && conn->noise_handshake_enabled) {
         if (conn->noise_handshake != nullptr) {
             /* non-Noise: noise_handshake not necessary anymore => memzero and free */
             crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
@@ -2785,6 +2786,9 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     // char log_spub[CRYPTO_PUBLIC_KEY_SIZE*2+1];
     // bytes2string(log_spub, sizeof(log_spub), n_c.peersessionpublic_key, CRYPTO_PUBLIC_KEY_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "RESPONDER: session pub: %s", log_spub);
+    char log_id_public[CRYPTO_PUBLIC_KEY_SIZE*2+1];
+    bytes2string(log_id_public, sizeof(log_id_public), n_c.peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE, c->log);
+    LOGGER_DEBUG(c->log, ": peer_id_public_key: %s", log_id_public);
     // char log_cookie[COOKIE_LENGTH*2+1];
     // bytes2string(log_cookie, sizeof(log_cookie), n_c.cookie, COOKIE_LENGTH, c->log);
     // LOGGER_DEBUG(c->log, "RESPONDER: cookie: %s", log_cookie);
@@ -2792,6 +2796,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
     const int crypt_connection_id = getcryptconnection_id(c, n_c.peer_id_public_key);
 
     //TODO: This is only called if new_crypto_connection() was already called in the meantime! Now Noise RESPONDER!
+    //TODO: why is this called twice in row via tcp_oob_callback() ?!
     /* happens NoiseIK handshake (e.g. auto_tox_many_test) */ 
     if (crypt_connection_id != -1) {
         LOGGER_DEBUG(c->log, "RESPONDER: CRYPTO CONN EXISTING -> crypt_connection_id: %d", crypt_connection_id);
@@ -2838,28 +2843,33 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         else { 
             LOGGER_DEBUG(c->log, "non-Noise handshake");
             conn->noise_handshake_enabled = false;
+
             //TODO: need to do the same here as in handle_crypto_hs() to switch? otherwise still think this is a Noise connection? (toxic_01022025_4.log)
             //TODO: not sure if that fixed something, connections taking way longer now in toxic
-            // if (conn->noise_handshake != nullptr) {
-            //     /* non-Noise: noise_handshake not necessary anymore => memzero and free */
-            //     crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
-            //     mem_delete(c->mem, conn->noise_handshake);
-            //     conn->noise_handshake = nullptr;
-            // }
-            // conn->noise_handshake_enabled = false;
-            // /* Ephemeral key pair needed in non-Noise handshake */
-            // crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
-            // /* Random nonce needed in non-Noise handshake */
-            // random_nonce(c->rng, conn->send_nonce);
-            // LOGGER_DEBUG(c->log, "Switch to non-Noise handshake");
-            // if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
-            //     mem_delete(c->mem, n_c.peer_cookie);
-            //     return -1;
-            // }
+            if (conn->noise_handshake != nullptr) {
+                /* non-Noise: noise_handshake not necessary anymore => memzero and free */
+                crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
+                mem_delete(c->mem, conn->noise_handshake);
+                conn->noise_handshake = nullptr;
+            }
+
+            uint8_t zeros[CRYPTO_PUBLIC_KEY_SIZE];
+            memset(zeros, 0, CRYPTO_PUBLIC_KEY_SIZE);
+            /* Need to check here, values overwritten if handle_new_connection_handshake() is called twice (happened in tests) */
+            if (memcmp(conn->ephemeral_public_key, zeros, CRYPTO_PUBLIC_KEY_SIZE) == 0 
+                    && memcmp(conn->ephemeral_secret_key, zeros, CRYPTO_SECRET_KEY_SIZE) == 0
+                    && memcmp(conn->send_nonce, zeros, CRYPTO_NONCE_SIZE) == 0) {
+                /* Ephemeral key pair needed in non-Noise handshake */
+                crypto_new_keypair(c->rng, conn->ephemeral_public_key, conn->ephemeral_secret_key);
+                /* Random nonce needed in non-Noise handshake */
+                random_nonce(c->rng, conn->send_nonce);
+                LOGGER_DEBUG(c->log, "Switch to non-Noise handshake");
+            }
 
             memcpy(conn->recv_nonce, n_c.recv_nonce, CRYPTO_NONCE_SIZE);
             memcpy(conn->peer_ephemeral_public_key, n_c.peer_ephemeral_public_key, CRYPTO_PUBLIC_KEY_SIZE);
             encrypt_precompute(conn->peer_ephemeral_public_key, conn->ephemeral_secret_key, conn->shared_key);
+
 
             crypto_connection_add_source(c, crypt_connection_id, source);
 
@@ -2924,6 +2934,10 @@ int accept_crypto_connection(Net_Crypto *c, const New_Connection *n_c)
     }
 
     conn->connection_number_tcp = connection_number_tcp;
+
+    char log_id_public[CRYPTO_PUBLIC_KEY_SIZE*2+1];
+    bytes2string(log_id_public, sizeof(log_id_public), n_c->peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE, c->log);
+    LOGGER_DEBUG(c->log, "peer_id_public_key: %s", log_id_public);
 
     // NoiseIK: only happening for RESPONDER
     if (n_c->noise_handshake != nullptr) {
@@ -3040,6 +3054,10 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     conn->connection_number_tcp = connection_number_tcp;
     /* Necessary for backwards compatibility to switch to non-Noise handshake */
     memcpy(conn->peer_id_public_key, real_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+    char log_id_public[CRYPTO_PUBLIC_KEY_SIZE*2+1];
+    bytes2string(log_id_public, sizeof(log_id_public), conn->peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE, c->log);
+    LOGGER_DEBUG(c->log, "peer_id_public_key: %s", log_id_public);
+
 
     /* Base nonces are a counter in transport phase after NoiseIK handshake */
     /* Only necessary after handshake is finished, but would need to set in multiple different places */
@@ -3055,6 +3073,9 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
 
     /* Necessary for backwards compatibility to switch to non-Noise handshake (only if enabled with option noise_compatibility_enabled) */
     conn->noise_handshake_enabled = true;
+    /* Need to set for check in handle_new_connection_handshake() */
+    memset(conn->ephemeral_public_key, 0, CRYPTO_PUBLIC_KEY_SIZE);
+    memset(conn->ephemeral_secret_key, 0, CRYPTO_SECRET_KEY_SIZE);
 
     /* TODO(goldroom): Noise: only necessary if Cookie response was successful, but moved here to avoid saving peer_id_public_key twice 
         (to remove it a some point from struct Crypto_Connection) */ 
