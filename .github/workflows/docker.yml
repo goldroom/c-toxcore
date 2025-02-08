@@ -112,7 +112,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          file: other/emscripten/Dockerfile
+          file: other/docker/wasm/wasm.Dockerfile
           push: ${{ github.event_name == 'push' }}
           tags: toxchat/c-toxcore:wasm
           cache-from: type=registry,ref=toxchat/c-toxcore:wasm

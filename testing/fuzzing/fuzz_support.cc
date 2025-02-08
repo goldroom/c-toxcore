@@ -175,12 +175,39 @@ static constexpr Network_Funcs fuzz_network_funcs = {
 static constexpr Random_Funcs fuzz_random_funcs = {
     /* .random_bytes = */
     ![](Fuzz_System *self, uint8_t *bytes, size_t length) {
-        // Amount of data is limited
-        const size_t bytes_read = std::min(length, self->data.size());
-        // Initialize everything to make MSAN and others happy
-        std::memset(bytes, 0, length);
-        CONSUME_OR_ABORT(const uint8_t *data, self->data, bytes_read);
-        std::copy(data, data + bytes_read, bytes);
+        // Initialize the buffer with zeros in case there's no randomness left.
+        std::fill_n(bytes, length, 0);
+
+        // For integers, we copy bytes directly, because we want to control the
+        // exact values.
+        if (length == sizeof(uint8_t) || length == sizeof(uint16_t) || length == sizeof(uint32_t)
+            || length == sizeof(uint64_t)) {
+            CONSUME_OR_RETURN(const uint8_t *data, self->data, length);
+            std::copy(data, data + length, bytes);
+            if (Fuzz_Data::FUZZ_DEBUG) {
+                if (length == 1) {
+                    std::printf("rng: %d (0x%02x)\n", bytes[0], bytes[0]);
+                } else {
+                    std::printf("rng: %02x..%02x[%zu]\n", bytes[0], bytes[length - 1], length);
+                }
+            }
+            return;
+        }
+
+        // For nonces and keys, we fill the buffer with the same 1-2 bytes
+        // repeated. We only need these to be different enough to not often be
+        // the same.
+        assert(length == 24 || length == 32);
+        // We must cover the case of having only 1 byte left in the input. In
+        // that case, we will use the same byte for all the bytes in the output.
+        const size_t chunk_size = std::max(self->data.size(), static_cast<std::size_t>(2));
+        CONSUME_OR_RETURN(const uint8_t *chunk, self->data, chunk_size);
+        if (chunk_size == 2) {
+            std::fill_n(bytes, length / 2, chunk[0]);
+            std::fill_n(bytes + length / 2, length / 2, chunk[1]);
+        } else {
+            std::fill_n(bytes, length, chunk[0]);
+        }
         if (Fuzz_Data::FUZZ_DEBUG) {
             if (length == 1) {
                 std::printf("rng: %d (0x%02x)\n", bytes[0], bytes[0]);

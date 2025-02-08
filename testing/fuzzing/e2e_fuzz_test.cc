@@ -5,7 +5,6 @@
 
 #include <cassert>
 #include <cstdio>
-#include <fstream>
 #include <vector>
 
 #include "../../toxcore/crypto_core.h"

@@ -111,13 +111,13 @@ static void test_basic(void)
     free(handshake_plain);
 
     // Sending the handshake
-    ck_assert_msg(net_send(ns, mem, logger, sock, handshake, TCP_CLIENT_HANDSHAKE_SIZE - 1,
+    ck_assert_msg(net_send(ns, logger, sock, handshake, TCP_CLIENT_HANDSHAKE_SIZE - 1,
                            &localhost, nullptr) == TCP_CLIENT_HANDSHAKE_SIZE - 1,
                   "An attempt to send the initial handshake minus last byte failed.");
 
     do_tcp_server_delay(tcp_s, mono_time, 50);
 
-    ck_assert_msg(net_send(ns, mem, logger, sock, handshake + (TCP_CLIENT_HANDSHAKE_SIZE - 1), 1, &localhost, nullptr) == 1,
+    ck_assert_msg(net_send(ns, logger, sock, handshake + (TCP_CLIENT_HANDSHAKE_SIZE - 1), 1, &localhost, nullptr) == 1,
                   "The attempt to send the last byte of handshake failed.");
 
     free(handshake);
@@ -127,7 +127,7 @@ static void test_basic(void)
     // Receiving server response and decrypting it
     uint8_t response[TCP_SERVER_HANDSHAKE_SIZE];
     uint8_t response_plain[TCP_HANDSHAKE_PLAIN_SIZE];
-    ck_assert_msg(net_recv(ns, mem, logger, sock, response, TCP_SERVER_HANDSHAKE_SIZE, &localhost) == TCP_SERVER_HANDSHAKE_SIZE,
+    ck_assert_msg(net_recv(ns, logger, sock, response, TCP_SERVER_HANDSHAKE_SIZE, &localhost) == TCP_SERVER_HANDSHAKE_SIZE,
                   "Could/did not receive a server response to the initial handshake.");
     ret = decrypt_data(mem, self_public_key, f_secret_key, response, response + CRYPTO_NONCE_SIZE,
                        TCP_SERVER_HANDSHAKE_SIZE - CRYPTO_NONCE_SIZE, response_plain);
@@ -156,7 +156,7 @@ static void test_basic(void)
             msg_length = sizeof(r_req) - i;
         }
 
-        ck_assert_msg(net_send(ns, mem, logger, sock, r_req + i, msg_length, &localhost, nullptr) == msg_length,
+        ck_assert_msg(net_send(ns, logger, sock, r_req + i, msg_length, &localhost, nullptr) == msg_length,
                       "Failed to send request after completing the handshake.");
         i += msg_length;
 
@@ -169,7 +169,7 @@ static void test_basic(void)
     const size_t max_packet_size = 4096;
     uint8_t *packet_resp = (uint8_t *)malloc(max_packet_size);
     ck_assert(packet_resp != nullptr);
-    int recv_data_len = net_recv(ns, mem, logger, sock, packet_resp, 2 + 2 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE, &localhost);
+    int recv_data_len = net_recv(ns, logger, sock, packet_resp, 2 + 2 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE, &localhost);
     ck_assert_msg(recv_data_len == 2 + 2 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE,
                   "Failed to receive server response to request. %d", recv_data_len);
     memcpy(&size, packet_resp, 2);
@@ -241,20 +241,20 @@ static struct sec_TCP_con *new_tcp_con(const Logger *logger, const Memory *mem, 
     ck_assert_msg(ret == TCP_CLIENT_HANDSHAKE_SIZE - (CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE),
                   "Failed to encrypt the outgoing handshake.");
 
-    ck_assert_msg(net_send(ns, mem, logger, sock, handshake, TCP_CLIENT_HANDSHAKE_SIZE - 1,
+    ck_assert_msg(net_send(ns, logger, sock, handshake, TCP_CLIENT_HANDSHAKE_SIZE - 1,
                            &localhost, nullptr) == TCP_CLIENT_HANDSHAKE_SIZE - 1,
                   "Failed to send the first portion of the handshake to the TCP relay server.");
 
     do_tcp_server_delay(tcp_s, mono_time, 50);
 
-    ck_assert_msg(net_send(ns, mem, logger, sock, handshake + (TCP_CLIENT_HANDSHAKE_SIZE - 1), 1, &localhost, nullptr) == 1,
+    ck_assert_msg(net_send(ns, logger, sock, handshake + (TCP_CLIENT_HANDSHAKE_SIZE - 1), 1, &localhost, nullptr) == 1,
                   "Failed to send last byte of handshake.");
 
     do_tcp_server_delay(tcp_s, mono_time, 50);
 
     uint8_t response[TCP_SERVER_HANDSHAKE_SIZE];
     uint8_t response_plain[TCP_HANDSHAKE_PLAIN_SIZE];
-    ck_assert_msg(net_recv(sec_c->ns, mem, logger, sock, response, TCP_SERVER_HANDSHAKE_SIZE, &localhost) == TCP_SERVER_HANDSHAKE_SIZE,
+    ck_assert_msg(net_recv(sec_c->ns, logger, sock, response, TCP_SERVER_HANDSHAKE_SIZE, &localhost) == TCP_SERVER_HANDSHAKE_SIZE,
                   "Failed to receive server handshake response.");
     ret = decrypt_data(mem, tcp_server_public_key(tcp_s), f_secret_key, response, response + CRYPTO_NONCE_SIZE,
                        TCP_SERVER_HANDSHAKE_SIZE - CRYPTO_NONCE_SIZE, response_plain);
@@ -291,7 +291,7 @@ static int write_packet_tcp_test_connection(const Logger *logger, const Memory *
     localhost.ip = get_loopback();
     localhost.port = 0;
 
-    ck_assert_msg(net_send(con->ns, mem, logger, con->sock, packet, packet_size, &localhost, nullptr) == packet_size,
+    ck_assert_msg(net_send(con->ns, logger, con->sock, packet, packet_size, &localhost, nullptr) == packet_size,
                   "Failed to send a packet.");
     return 0;
 }
@@ -302,7 +302,7 @@ static int read_packet_sec_tcp(const Logger *logger, struct sec_TCP_con *con, ui
     localhost.ip = get_loopback();
     localhost.port = 0;
 
-    int rlen = net_recv(con->ns, con->mem, logger, con->sock, data, length, &localhost);
+    int rlen = net_recv(con->ns, logger, con->sock, data, length, &localhost);
     ck_assert_msg(rlen == length, "Did not receive packet of correct length. Wanted %i, instead got %i", length, rlen);
     rlen = decrypt_data_symmetric(con->mem, con->shared_key, con->recv_nonce, data + 2, length - 2, data);
     ck_assert_msg(rlen != -1, "Failed to decrypt a received packet from the Relay server.");

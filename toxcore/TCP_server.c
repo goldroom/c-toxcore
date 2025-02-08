@@ -362,7 +362,7 @@ static int handle_tcp_handshake(const Logger *logger, TCP_Secure_Connection *con
 
     const IP_Port ipp = {{{0}}};
 
-    if (TCP_SERVER_HANDSHAKE_SIZE != net_send(con->con.ns, con->con.mem, logger, con->con.sock, response, TCP_SERVER_HANDSHAKE_SIZE, &ipp, con->con.net_profile)) {
+    if (TCP_SERVER_HANDSHAKE_SIZE != net_send(con->con.ns, logger, con->con.sock, response, TCP_SERVER_HANDSHAKE_SIZE, &ipp, con->con.net_profile)) {
         crypto_memzero(shared_key, sizeof(shared_key));
         return -1;
     }
@@ -942,10 +942,9 @@ static Socket new_listening_tcp_socket(const Logger *logger, const Memory *mem, 
     ok = ok && bind_to_port(ns, sock, family, port) && (net_listen(ns, sock, TCP_MAX_BACKLOG) == 0);
 
     if (!ok) {
-        char *const error = net_new_strerror(mem, net_error());
+        Net_Strerror error_str;
         LOGGER_WARNING(logger, "could not bind to TCP port %d (family = %d): %s",
-                       port, family.value, error != nullptr ? error : "(null)");
-        net_kill_strerror(mem, error);
+                       port, family.value, net_strerror(net_error(), &error_str));
         kill_sock(ns, sock);
         return net_invalid_socket();
     }

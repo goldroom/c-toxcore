@@ -32,10 +32,8 @@ static void test_addr_resolv_localhost(void)
     bool res = addr_resolve_or_parse_ip(ns, mem, localhost, &ip, nullptr, true);
 
     int error = net_error();
-    char *strerror = net_new_strerror(mem, error);
-    ck_assert(strerror != nullptr);
-    ck_assert_msg(res, "Resolver failed: %d, %s", error, strerror);
-    net_kill_strerror(mem, strerror);
+    Net_Strerror error_str;
+    ck_assert_msg(res, "Resolver failed: %d, %s", error, net_strerror(error, &error_str));
 
     Ip_Ntoa ip_str;
     ck_assert_msg(net_family_is_ipv4(ip.family), "Expected family TOX_AF_INET, got %u.", ip.family.value);
@@ -56,10 +54,7 @@ static void test_addr_resolv_localhost(void)
     }
 
     error = net_error();
-    strerror = net_new_strerror(mem, error);
-    ck_assert(strerror != nullptr);
-    ck_assert_msg(res, "Resolver failed: %d, %s", error, strerror);
-    net_kill_strerror(mem, strerror);
+    ck_assert_msg(res, "Resolver failed: %d, %s", error, net_strerror(error, &error_str));
 
     ck_assert_msg(net_family_is_ipv6(ip.family), "Expected family TOX_AF_INET6 (%d), got %u.", TOX_AF_INET6,
                   ip.family.value);
@@ -80,10 +75,7 @@ static void test_addr_resolv_localhost(void)
     ip_reset(&extra);
     res = addr_resolve_or_parse_ip(ns, mem, localhost, &ip, &extra, true);
     error = net_error();
-    strerror = net_new_strerror(mem, error);
-    ck_assert(strerror != nullptr);
-    ck_assert_msg(res, "Resolver failed: %d, %s", error, strerror);
-    net_kill_strerror(mem, strerror);
+    ck_assert_msg(res, "Resolver failed: %d, %s", error, net_strerror(error, &error_str));
 
 #if USE_IPV6
     ck_assert_msg(net_family_is_ipv6(ip.family), "Expected family TOX_AF_INET6 (%d), got %u.", TOX_AF_INET6,

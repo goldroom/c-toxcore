@@ -17,6 +17,7 @@
 #include "../toxcore/logger.h"
 #include "../toxcore/mono_time.h"
 #include "../toxcore/net_crypto.h"
+#include "../toxcore/network.h"
 #include "../toxcore/tox_private.h"
 #include "../toxcore/util.h"
 
@@ -778,11 +779,10 @@ void rtp_stop_receiving(Tox *tox)
 static void rtp_report_error_maybe(const Logger *log, const Memory *mem, Tox_Err_Friend_Custom_Packet error, uint16_t rdata_size)
 {
     if (error != TOX_ERR_FRIEND_CUSTOM_PACKET_OK) {
-        char *netstrerror = net_new_strerror(mem, net_error());
+        Net_Strerror error_str;
         const char *toxerror = tox_err_friend_custom_packet_to_string(error);
         LOGGER_WARNING(log, "RTP send failed (len: %u)! tox error: %s net error: %s",
-                       rdata_size, toxerror, netstrerror);
-        net_kill_strerror(mem, netstrerror);
+                       rdata_size, toxerror, net_strerror(net_error(), &error_str));
     }
 }
 

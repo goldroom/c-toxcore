@@ -113,8 +113,8 @@ Family net_family_tox_tcp_ipv6(void);
 typedef enum Net_Packet_Type {
     NET_PACKET_PING_REQUEST         = 0x00, /* Ping request packet ID. */
     NET_PACKET_PING_RESPONSE        = 0x01, /* Ping response packet ID. */
-    NET_PACKET_GET_NODES            = 0x02, /* Get nodes request packet ID. */
-    NET_PACKET_SEND_NODES_IPV6      = 0x04, /* Send nodes response packet ID for other addresses. */
+    NET_PACKET_NODES_REQUEST        = 0x02, /* Nodes request packet ID. */
+    NET_PACKET_NODES_RESPONSE       = 0x04, /* Nodes response packet ID. */
     NET_PACKET_COOKIE_REQUEST       = 0x18, /* Cookie request packet */
     NET_PACKET_COOKIE_RESPONSE      = 0x19, /* Cookie response packet */
     NET_PACKET_CRYPTO_HS            = 0x1a, /* Crypto handshake packet */
@@ -238,7 +238,6 @@ Socket net_invalid_socket(void);
  * Calls send(sockfd, buf, len, MSG_NOSIGNAL).
  *
  * @param ns System network object.
- * @param mem Memory object, only used for logging.
  * @param log Logger object.
  * @param sock Socket to send data with.
  * @param buf Data to send.
@@ -246,14 +245,13 @@ Socket net_invalid_socket(void);
  * @param ip_port IP and port to send data to.
  * @param net_profile Network profile to record the packet.
  */
-non_null(1, 2, 3, 5, 7) nullable(8)
-int net_send(const Network *ns, const Memory *mem, const Logger *log, Socket sock, const uint8_t *buf, size_t len, const IP_Port *ip_port,
+non_null(1, 2, 4, 6) nullable(7)
+int net_send(const Network *ns, const Logger *log, Socket sock, const uint8_t *buf, size_t len, const IP_Port *ip_port,
              Net_Profile *net_profile);
 /**
  * Calls recv(sockfd, buf, len, MSG_NOSIGNAL).
  *
  * @param ns System network object.
- * @param mem Memory object, only used for logging.
  * @param log Logger object.
  * @param sock Socket to receive data with.
  * @param buf Buffer to store received data.
@@ -261,7 +259,7 @@ int net_send(const Network *ns, const Memory *mem, const Logger *log, Socket soc
  * @param ip_port IP and port of the sender.
  */
 non_null()
-int net_recv(const Network *ns, const Memory *mem, const Logger *log, Socket sock, uint8_t *buf, size_t len, const IP_Port *ip_port);
+int net_recv(const Network *ns, const Logger *log, Socket sock, uint8_t *buf, size_t len, const IP_Port *ip_port);
 /**
  * Calls listen(sockfd, backlog).
  */
@@ -599,27 +597,32 @@ bool bind_to_port(const Network *ns, Socket sock, Family family, uint16_t port);
  * Note that different platforms may return different codes for the same error,
  * so you likely shouldn't be checking the value returned by this function
  * unless you know what you are doing, you likely just want to use it in
- * combination with `net_new_strerror()` to print the error.
+ * combination with `net_strerror()` to print the error.
  *
  * return platform-dependent network error code, if any.
  */
 int net_error(void);
 
+#define NET_STRERROR_SIZE 256
+
+/** @brief Contains a null terminated formatted error message.
+ *
+ * This struct should not contain more than at most the 2 fields.
+ */
+typedef struct Net_Strerror {
+    char     data[NET_STRERROR_SIZE];
+    uint16_t size;
+} Net_Strerror;
+
 /** @brief Get a text explanation for the error code from `net_error()`.
  *
- * return NULL on failure.
- * return pointer to a NULL-terminated string describing the error code on
- * success. The returned string must be freed using `net_kill_strerror()`.
+ * @param error The error code to get a string for.
+ * @param buf The struct to store the error message in (usually on stack).
+ *
+ * @return pointer to a NULL-terminated string describing the error code.
  */
 non_null()
-char *net_new_strerror(const Memory *mem, int error);
-
-/** @brief Frees the string returned by `net_new_strerror()`.
- * It's valid to pass NULL as the argument, the function does nothing in this
- * case.
- */
-non_null(1) nullable(2)
-void net_kill_strerror(const Memory *mem, char *strerror);
+char *net_strerror(int error, Net_Strerror *buf);
 
 /** @brief Initialize networking.
  * Bind to ip and port.

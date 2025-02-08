@@ -5,17 +5,17 @@
 #ifndef C_TOXCORE_TESTING_FUZZING_FUZZ_SUPPORT_H
 #define C_TOXCORE_TESTING_FUZZING_FUZZ_SUPPORT_H
 
+#include <array>
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "../../toxcore/tox.h"
 #include "../../toxcore/tox_private.h"
 
 struct Fuzz_Data {
@@ -256,6 +256,38 @@ struct Null_System : System {
     Null_System();
 };
 
+template <typename V>
+class int_map {
+public:
+    struct iterator {
+        std::pair<uint16_t, V> pair;
+
+        bool operator==(const iterator &rhs) const { return pair.first == rhs.pair.first; }
+        bool operator!=(const iterator &rhs) const { return pair.first != rhs.pair.first; }
+
+        std::pair<uint16_t, V> operator*() const { return pair; }
+        const std::pair<uint16_t, V> *operator->() const { return &pair; }
+    };
+
+    int_map() = default;
+    ~int_map() = default;
+
+    iterator find(uint16_t key) const
+    {
+        if (!values[key]) {
+            return end();
+        }
+        return {{key, values[key]}};
+    }
+
+    iterator end() const { return {{static_cast<uint16_t>(values.size()), nullptr}}; }
+
+    void emplace(uint16_t key, V value) { values[key] = value; }
+
+private:
+    std::array<V, UINT16_MAX> values;
+};
+
 /**
  * A Tox_System implementation that records all I/O but does not actually
  * perform any real I/O. Everything inside this system is hermetic in-process
@@ -280,7 +312,7 @@ struct Record_System : System {
          * toxcore sends packets to itself sometimes when doing onion routing
          * with only 2 nodes in the network.
          */
-        std::unordered_map<uint16_t, Record_System *> bound;
+        int_map<Record_System *> bound;
     };
 
     Global &global_;
