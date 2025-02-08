@@ -600,26 +600,6 @@ non_null(1, 2, 3, 5) nullable(6)
 int32_t decrypt_data_symmetric_xaead(const uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE], const uint8_t nonce[CRYPTO_NONCE_SIZE], const uint8_t *encrypted, size_t encrypted_length,
                                     uint8_t *plain, const uint8_t *ad, size_t ad_length);
 
-//TODO(goldroom): remove, unused function
-/**
- * @brief Compute an HMAC-SHA512 authenticator (64 bytes).
- *
- * cf. Noise sections 4.3 and 5.1
- * Applies HMAC from RFC2104 (https://tools.ietf.org/html/rfc2104) using the HASH() (=SHA512) function.
- * This function is only called via `crypto_hkdf()`.
- * HMAC-SHA-512 instead of HMAC-SHA512-256 as used by `crypto_auth_*()` (libsodium) which is underlying function of
- * `crypto_hmac*() in crypto_core. Necessary for Noise (cf. section 4.3) to return 64 bytes (SHA512 HASHLEN) instead of
- * of 32 bytes (SHA512-256 HASHLEN). Cf. https://doc.libsodium.org/advanced/hmac-sha2#hmac-sha-512
- * key is CRYPTO_SHA512_SIZE bytes because this function is only called via crypto_hkdf() where the key (ck, temp_key)
- * is always HASHLEN bytes.
- *
- * @param auth Resulting authenticator.
- * @param key Secret key
- */
-non_null(1, 2) nullable(3)
-void crypto_hmac512(uint8_t *auth, const uint8_t key[CRYPTO_SHA512_SIZE], const uint8_t *data,
-                    size_t data_length);
-
 /**
  * @brief Computes the number of provides outputs (=keys) with HKDF-SHA512.
  *
@@ -679,9 +659,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
 non_null(1, 2) nullable(3, 5)
 int noise_handshake_init
 (Noise_Handshake *noise_handshake, const uint8_t self_id_secret_key[CRYPTO_SECRET_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], bool initiator, const uint8_t *prologue, size_t prologue_length);
-//TODO: remove
-// int noise_handshake_init
-// (const Logger *log, Noise_Handshake *noise_handshake, const uint8_t *self_secret_key, const uint8_t *peer_public_key, bool initiator, const uint8_t *prologue, size_t prologue_length);
+
 /**
  * @brief Noise MixKey(input_key_material)
  *
