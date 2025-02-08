@@ -1857,7 +1857,7 @@ static int send_kill_packet(const Net_Crypto *c, int crypt_connection_id)
 
     const uint8_t kill_packet[1] = {PACKET_ID_KILL};
 
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     return send_data_packet_helper(c, crypt_connection_id, conn->recv_array.buffer_start, conn->send_array.buffer_end,
                                    kill_packet, sizeof(kill_packet));
@@ -1868,7 +1868,7 @@ static void connection_kill(Net_Crypto *c, int crypt_connection_id, void *userda
 {
     const Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     if (conn == nullptr) {
         return;
@@ -2366,7 +2366,7 @@ static int realloc_cryptoconnection(Net_Crypto *c, uint32_t num)
 non_null()
 static int create_crypto_connection(Net_Crypto *c)
 {
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     int id = -1;
 
@@ -2415,7 +2415,7 @@ static int create_crypto_connection(Net_Crypto *c)
 non_null()
 static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
 {
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     if ((uint32_t)crypt_connection_id >= c->crypto_connections_length) {
         return -1;
@@ -3188,7 +3188,7 @@ int nc_dht_pk_callback(const Net_Crypto *c, int crypt_connection_id, dht_pk_cb *
 {
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     if (conn == nullptr) {
         return -1;
@@ -3747,7 +3747,7 @@ bool crypto_connection_status(const Net_Crypto *c, int crypt_connection_id, bool
 
 void new_keys(Net_Crypto *c)
 {
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
     crypto_new_keypair(c->rng, c->self_id_public_key, c->self_id_secret_key);
 }
 
@@ -3877,7 +3877,7 @@ void kill_net_crypto(Net_Crypto *c)
         return;
     }
 
-    LOGGER_DEBUG(c->log, "");
+    LOGGER_DEBUG(c->log, ">");
 
     const Memory *mem = c->mem;
 
