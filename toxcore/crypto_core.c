@@ -794,7 +794,7 @@ void crypto_hkdf(uint8_t *output1, size_t first_len, uint8_t *output2,
     memcpy(output2, output, second_len);
 
     /* Expand third key: key = temp_key, data = second-key || 0x3 */
-    /* TODO(goldroom): Currently output3 is not used in Tox, maybe necessary in future for pre-shared symmetric keys (cf. Noise spec )*/
+    /* TODO(goldroom): Currently output3 is not used in Tox, maybe necessary in future for pre-shared symmetric keys (cf. Noise spec) */
     // output[CRYPTO_SHA512_SIZE] = 3;
     // crypto_hmac512(output, temp_key, output, CRYPTO_SHA512_SIZE + 1);
     // memcpy(output3, output, third_len);
@@ -863,7 +863,7 @@ void noise_encrypt_and_hash(uint8_t *ciphertext, const uint8_t *plaintext,
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISE_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISE_NONCE_SIZE);
 
-    int32_t encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
+    const int32_t encrypted_length = encrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           plaintext, plain_length, ciphertext,
                                           hash, CRYPTO_NOISE_BLAKE2B_HASH_SIZE);
 
@@ -882,7 +882,7 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
     static uint8_t nonce_chacha20_ietf[CRYPTO_NOISE_NONCE_SIZE] = {0};
     memset(nonce_chacha20_ietf, 0, CRYPTO_NOISE_NONCE_SIZE);
 
-    int32_t plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
+    const int32_t plaintext_length = decrypt_data_symmetric_aead(shared_key, nonce_chacha20_ietf,
                                           ciphertext, encrypted_length, plaintext,
                                           hash, CRYPTO_NOISE_BLAKE2B_HASH_SIZE);
 
@@ -914,11 +914,6 @@ int noise_decrypt_and_hash(uint8_t *plaintext, const uint8_t *ciphertext,
 int noise_handshake_init
 (Noise_Handshake *noise_handshake, const uint8_t self_id_secret_key[CRYPTO_SECRET_KEY_SIZE], const uint8_t peer_id_public_key[CRYPTO_PUBLIC_KEY_SIZE], bool initiator, const uint8_t *prologue, size_t prologue_length)
 {
-    //TODO: remove
-    // if (log != nullptr) {
-    //     LOGGER_DEBUG(log, "ENTERING");
-    // }
-
     /* IntializeSymmetric(protocol_name) => set h to NOISE_PROTOCOL_NAME and append zero bytes to make 64 bytes, sets ck = h
      Nothing gets hashed in Tox case because NOISE_PROTOCOL_NAME < CRYPTO_SHA512_SIZE */
     uint8_t temp_hash[CRYPTO_NOISE_BLAKE2B_HASH_SIZE];
@@ -930,26 +925,11 @@ int noise_handshake_init
     /* IMPORTANT needs to be called with (empty/zero-length) prologue! */ 
     noise_mix_hash(noise_handshake->hash, prologue, prologue_length);
 
-    //TODO: remove
-    // char log_ck[CRYPTO_SHA512_SIZE*2+1];
-    // if (log != nullptr) {
-    //     bytes2string(log_ck, sizeof(log_ck), noise_handshake->chaining_key, CRYPTO_SHA512_SIZE, log);
-    //     LOGGER_DEBUG(log, "ck: %s", log_ck);
-    // }
-
     /* Sets the initiator, s => ephemeral keys are set afterwards */
     noise_handshake->initiator = initiator;
     if (self_id_secret_key != nullptr) {
         memcpy(noise_handshake->static_private, self_id_secret_key, CRYPTO_SECRET_KEY_SIZE);
         crypto_derive_public_key(noise_handshake->static_public, self_id_secret_key);
-
-        //TODO: remove
-        // if (log != nullptr) {
-        //     char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-        //     bytes2string(log_spub, sizeof(log_spub), noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, log);
-        //     LOGGER_DEBUG(log, "static pub: %s", log_spub);
-        // }
-
     } else {
         // fprintf(stderr, "Local static private key required, but not provided.\n");
         // LOGGER_DEBUG(log, "Local static private key required, but not provided.");
@@ -960,21 +940,8 @@ int noise_handshake_init
         if (peer_id_public_key != nullptr) {
             memcpy(noise_handshake->remote_static, peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
 
-            //TODO: Remove
-            // if (log != nullptr) {
-            //     char log_spub[CRYPTO_PUBLIC_KEY_SIZE * 2 + 1];
-            //     bytes2string(log_spub, sizeof(log_spub), noise_handshake->remote_static, CRYPTO_PUBLIC_KEY_SIZE, log);
-            //     LOGGER_DEBUG(log, "INITIATOR remote static: %s", log_spub);
-            // }
-
             /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
             noise_mix_hash(noise_handshake->hash, peer_id_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-
-            //TODO: remove
-            // if (log != nullptr) {
-            //     bytes2string(log_hash, sizeof(log_hash), noise_handshake->hash, CRYPTO_SHA512_SIZE, log);
-            //     LOGGER_DEBUG(log, "INITIATOR hash: %s", log_hash);
-            // }
         } else {
             // fprintf(stderr, "Remote peer static public key required, but not provided.\n");
             // LOGGER_DEBUG(log, "Remote peer static public key required, but not provided.");
@@ -986,20 +953,14 @@ int noise_handshake_init
         /* Calls MixHash() once for each public key listed in the pre-messages from Noise IK */
         noise_mix_hash(noise_handshake->hash, noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE);
 
-        //TODO(goldroom): precompute static static here (ss)? cf. WireGuard wg_noise_handshake_init()
-
-        //TODO: remove
-        // if (log != nullptr) {
-        //     bytes2string(log_hash, sizeof(log_hash), noise_handshake->hash, CRYPTO_SHA512_SIZE, log);
-        //     LOGGER_DEBUG(log, "RESPONDER hash: %s", log_hash);
-        // }
+        // TODO(goldroom): precompute static static here (ss)? cf. WireGuard wg_noise_handshake_init()
     }
 
     /* Ready to go */
     return 0;
 }
 
-//TODO(goldroom): abstract creation and handling of NoiseIK handshake packets from net_crypto (_after_ cookie adaption)
+// TODO(goldroom): abstract creation and handling of NoiseIK handshake packets from net_crypto (_after_ cookie adaption)
 // /* Noise create INITIATOR: -> e, es, s, ss */
 // int noise_handshake_create_initiator()
 // /* Noise handle INITIATOR: -> e, es, s, ss */

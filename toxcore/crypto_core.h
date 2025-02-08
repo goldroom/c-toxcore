@@ -135,7 +135,7 @@ typedef struct Noise_Handshake {
     uint8_t ephemeral_public[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_static[CRYPTO_PUBLIC_KEY_SIZE];
     uint8_t remote_ephemeral[CRYPTO_PUBLIC_KEY_SIZE];
-    //TODO(goldroom): precompute static static? cf. WireGuard struct noise_handshake
+    // TODO(goldroom): precompute static static? cf. WireGuard struct noise_handshake
     // uint8_t precomputed_static_static[CRYPTO_SHARED_KEY_SIZE];
 
     uint8_t hash[CRYPTO_SHA512_SIZE];

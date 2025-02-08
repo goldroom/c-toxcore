@@ -136,10 +136,10 @@ typedef struct New_Connection {
     uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce to decrypt received packets. */
     uint8_t peer_ephemeral_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     // Necessary for Noise
-    //TODO(goldroom): refactor to not use struct
+    // TODO(goldroom): refactor to not use struct
     Noise_Handshake noise_handshake_data;
     Noise_Handshake *noise_handshake;
-    //TODO(goldroom): if no struct necessary
+    // TODO(goldroom): if no struct necessary
     // uint8_t noise_hash[CRYPTO_SHA512_SIZE];
     // uint8_t noise_chaining_key[CRYPTO_SHA512_SIZE];
     // uint8_t niose_send_key[CRYPTO_SHARED_KEY_SIZE];
@@ -418,7 +418,7 @@ void load_secret_key(Net_Crypto *c, const uint8_t *sk);
  */
 non_null()
 Net_Crypto *new_net_crypto(const Logger *log, const Memory *mem, const Random *rng, const Network *ns,
-                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, const bool noise_compatibility_enabled);
+                           Mono_Time *mono_time, DHT *dht, const TCP_Proxy_Info *proxy_info, bool noise_compatibility_enabled);
 
 /** return the optimal interval in ms for running do_net_crypto. */
 non_null()
@@ -431,7 +431,7 @@ void do_net_crypto(Net_Crypto *c, void *userdata);
 nullable(1)
 void kill_net_crypto(Net_Crypto *c);
 
-//TODO(goldroom): necessary?
+// TODO(goldroom): necessary?
 //static void handshake_zero(struct noise_handshake *handshake);
 
 
