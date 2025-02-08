@@ -86,12 +86,12 @@ extern "C" {
 /**
  * @brief The number of bytes in a BLAKE2b-512 hash (as defined for Noise in section 12.8.).
  */
-#define CRYPTO_NOISE_BLAKE2b_HASH_SIZE             64
+#define CRYPTO_NOISE_BLAKE2B_HASH_SIZE             64
 
 /**
  * @brief The number of bytes in a BLAKE2b block.
  */
-#define CRYPTO_BLAKE2b_BLOCK_SIZE             128
+#define CRYPTO_BLAKE2B_BLOCK_SIZE             128
 
 /** @brief Fill a byte array with random bytes.
  *
