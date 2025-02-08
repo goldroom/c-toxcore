@@ -6,7 +6,7 @@
 #include "../toxcore/crypto_core.h"
 #include "../toxcore/net_crypto.h"
 #include "check_compat.h"
-//TODO: necessary to print bytes
+//TODO(goldroom): necessary to print bytes
 // #include "../other/fun/create_common.h"
 
 static void rand_bytes(const Random *rng, uint8_t *b, size_t blen)
@@ -373,7 +373,7 @@ static void test_memzero(void)
     }
 }
 
-//TODO: Remove if Blake2b?
+//TODO(goldroom): Remove if Blake2b?
 // /* Noise_IK_25519_ChaChaPoly_SHA512 test vectors from here: https://github.com/rweather/noise-c/blob/cfe25410979a87391bb9ac8d4d4bef64e9f268c6/tests/vector/noise-c-basic.txt */
 // /* "init_prologue": "50726f6c6f677565313233" (same as `resp_prologue`) */
 // static const uint8_t prologue[11] = {
@@ -523,7 +523,7 @@ static void test_memzero(void)
 //     0xc1, 0x4c, 0xbd, 0x4f, 0x14, 0xcc, 0xd1, 0xe1
 // };
 
-/* TODO: Currently unused */
+/* TODO(goldroom): Currently unused */
 // // 4a 65 61 6e 2d 42 61 70 74 69 73 74 65 20 53 61 79
 // static const uint8_t init_payload_transport2[17] = {
 //     0x4a, 0x65, 0x61, 0x6e, 0x2d, 0x42, 0x61, 0x70, 0x74, 0x69, 0x73, 
@@ -686,11 +686,11 @@ static const uint8_t handshake_hash[CRYPTO_SHA512_SIZE] = {
     0xf1, 0xfe, 0x5a, 0x7f, 0x0c, 0x55, 0xc0, 0x78
 };
 
-//TODO: "payload": "4a65616e2d426170746973746520536179",
-//TODO: "ciphertext": "49063084b2c51f098337cb8a13739ac848f907e67cfb2cc8a8b60586467aa02fc7"
+//TODO(goldroom): "payload": "4a65616e2d426170746973746520536179",
+//TODO(goldroom): "ciphertext": "49063084b2c51f098337cb8a13739ac848f907e67cfb2cc8a8b60586467aa02fc7"
 
-//TODO: "payload": "457567656e2042f6686d20766f6e2042617765726b",
-//TODO: "ciphertext": "8b9709d23b47e4639df7678d7a21741eba4ef1e9c60383001c7435549c20f9d56f30e935d3"
+//TODO(goldroom): "payload": "457567656e2042f6686d20766f6e2042617765726b",
+//TODO(goldroom): "ciphertext": "8b9709d23b47e4639df7678d7a21741eba4ef1e9c60383001c7435549c20f9d56f30e935d3"
 
 static void test_noiseik(void) 
 { 
@@ -749,11 +749,6 @@ static void test_noiseik(void)
     // printf("noise_handshake_temp_key (after es): %s\n", key_print);
 
     /* s */
-    //TODO: remove; not necessary to due change to ChaCha20-Poly1305 instead of XChaCha20-Poly1305
-    /*Nonce provided as parameter is the base nonce! -> This adds nonce for static pub key encryption to packet (XChaCha20-Poly1305) */
-    // random_nonce(c->rng, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE);
-    // noise_encrypt_and_hash(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE, noise_handshake->static_public, CRYPTO_PUBLIC_KEY_SIZE, noise_handshake_temp_key,
-                        //    noise_handshake->hash, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE);
 
     /* Nonce for static pub key encryption is _always_ 0 in case of ChaCha20-Poly1305 */
     uint8_t ciphertext1[CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE];
@@ -768,7 +763,7 @@ static void test_noiseik(void)
     ck_assert_msg(memcmp(ciphertext1, init_encrypted_static_public, CRYPTO_PUBLIC_KEY_SIZE+CRYPTO_MAC_SIZE) == 0, "initiator encrypted static public keys differ");
 
 
-    //TODO: remove from production code
+    //TODO(goldroom): remove from production code
     // char log_hash2[CRYPTO_SHA512_SIZE*2+1];
     // bytes2string(log_hash2, sizeof(log_hash2), noise_handshake->hash, CRYPTO_SHA512_SIZE, c->log);
     // LOGGER_DEBUG(c->log, "hash2 INITIATOR: %s", log_hash2);
@@ -783,13 +778,6 @@ static void test_noiseik(void)
     /* Noise Handshake Payload */
     // uint8_t handshake_payload_plain[15];
     uint8_t ciphertext2[sizeof(init_payload_hs) + CRYPTO_MAC_SIZE];
-
-    //TODO: remove; not necessary to due change to ChaCha20-Poly1305 instead of XChaCha20-Poly1305
-    /* Add Handshake payload nonce */
-    // random_nonce(c->rng, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE);
-    // noise_encrypt_and_hash(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE + CRYPTO_NONCE_SIZE,
-    //                        handshake_payload_plain, sizeof(handshake_payload_plain), noise_handshake_temp_key,
-    //                        noise_handshake->hash, packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_MAC_SIZE);
 
     /* Nonce for payload encryption is _always_ 0 in case of ChaCha20-Poly1305 */
     noise_encrypt_and_hash(ciphertext2,

@@ -2348,10 +2348,8 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 return -1;
             }
         }
-        //TODO: Differentiate between change and not change? if not changed, no call to noise_handshake_init() necessary => TODO: need info in conn or noise_handshake
-        //TODO: Or add new connection state?
         /* Case where RESPONDER with and without change from INITIATOR */
-        //TODO: I think this cannot happen
+        //TODO(goldroom): this doesn't seem to happen, wether in auto_tests nor in real-world tests => remove?
         else {
             if (length == NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR) {
                 LOGGER_DEBUG(c->log, "RESPONDER: Noise handshake -> NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR");
@@ -2373,13 +2371,13 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
                     return -1;
                 }
-                //TODO: here?
+                //TODO(goldroom): here?
                 conn->status = CRYPTO_CONN_HANDSHAKE_SENT;
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
-                //TODO: Does this even happen?
+                //TODO(goldroom): Does this even happen?
                 LOGGER_DEBUG(c->log, "RESPONDER: NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
                 /* cannot change to INITIATOR here, connection broken */
-                //TODO: leave here?
+                //TODO(goldroom): leave here?
                 connection_kill(c, crypt_connection_id, userdata);
                 return -1;
             }
@@ -2396,7 +2394,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         }
     }
 
-    //TODO: adapt for NoiseIK, makes only sense for RESPONDER not initiator
+    //TODO(goldroom): adapt for NoiseIK, makes only sense for RESPONDER not initiator?
     if (pk_equal(dht_public_key, conn->peer_dht_public_key)) {
         if (conn->noise_handshake_enabled && conn->noise_handshake != nullptr) {
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
@@ -2429,14 +2427,13 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
         /* Backwards compatibility: non-Noise handshake case */
         else {
             LOGGER_DEBUG(c->log, "non-Noise handshake");
-            // if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) { //TODO: doesn't work if Noise handshake packet was sent before
+            // if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) { //TODO(goldroom): doesn't work if Noise handshake packet was sent before
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
                     return -1;
                 }
             // }
             /* Backwards compatibility: necessary for non-Noise handshake */ 
             encrypt_precompute(conn->peer_ephemeral_public_key, conn->ephemeral_secret_key, conn->shared_key);
-            //TODO: why here and not before? => set before, in case of dht_pk_callback there is a new crypto connection created anyway
             /* Backwards compatibility: necessary for non-Noise handshake */ 
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
         }
@@ -2763,8 +2760,8 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
         //TODO: remove
         LOGGER_DEBUG(c->log, "Noise RESPONDER: After Handshake init");
 
-        /* Noise: peer_real_pk (=n_c.public_key) not necessary for Noise, but need to include -> otherwise not working (call via friend_connection.c) */ 
-        //TODO: adapt peer_real_pk (=n_c.public_key) for Noise?
+        /* Noise: peer_id_public_key (=n_c.peer_id_public_key) not necessary for Noise, but need to include -> otherwise not working (call via friend_connection.c) */ 
+        //TODO(goldroom): adapt peer_id_public_key (=n_c.peer_id_public_key) for Noise?
         if (!handle_crypto_handshake(c, nullptr, nullptr, n_c.peer_id_public_key, n_c.peer_dht_public_key,
                                      n_c.peer_cookie, packet, length, nullptr, n_c.noise_handshake)) {
             crypto_memzero(n_c.noise_handshake, sizeof(Noise_Handshake));
@@ -2849,8 +2846,7 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             LOGGER_DEBUG(c->log, "non-Noise handshake");
             conn->noise_handshake_enabled = false;
 
-            //TODO: need to do the same here as in handle_crypto_hs() to switch? otherwise still think this is a Noise connection? (toxic_01022025_4.log)
-            //TODO: not sure if that fixed something, connections taking way longer now in toxic
+            /* necessary for compatiblity to non-Noise handshake; */
             if (conn->noise_handshake != nullptr) {
                 /* non-Noise: noise_handshake not necessary anymore => memzero and free */
                 crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
@@ -3491,8 +3487,6 @@ static int udp_handle_packet(void *object, const IP_Port *source, const uint8_t 
         return 0;
     }
 
-    //TODO: return -1 if RESPONDER?
-
     if (handle_packet_connection(c, crypt_connection_id, packet, length, true, userdata) != 0) {
         return 1;
     }
@@ -3546,13 +3540,13 @@ static void send_crypto_packets(Net_Crypto *c)
             continue;
         }
 
-        //TODO: remove TODO: interesting if want to adapt interval
+        //TODO(goldroom): remove? interesting if want to adapt interval
         // LOGGER_DEBUG(c->log, "conn->handshake_send_interval: %d", conn->handshake_send_interval);
         // LOGGER_DEBUG(c->log, "conn->temp_packet_sent_time: %lu", conn->temp_packet_sent_time);
         // LOGGER_DEBUG(c->log, "(conn->handshake_send_interval + conn->temp_packet_sent_time): %lu", (conn->handshake_send_interval + conn->temp_packet_sent_time));
         // LOGGER_DEBUG(c->log, "temp_time: %lu", temp_time);
 
-        //TODO: Use again? / TODO: adapt interval?
+        //TODO(goldroom): Use again? / adapt interval?
         if ((CRYPTO_SEND_PACKET_INTERVAL + conn->temp_packet_sent_time) < temp_time) {
             //TODO: remove
             //LOGGER_DEBUG(c->log, "=> call send_temp_packet() => random_backoff: %d", random_backoff);
@@ -4117,7 +4111,7 @@ void do_net_crypto(Net_Crypto *c, void *userdata)
 {
     //TODO: remove
     // LOGGER_DEBUG(c->log, "do_net_crypto()");
-    //TODO: update cookie symmetric key every ~2 minutes (cf. WireGuard)?
+    //TODO(goldroom) update cookie symmetric key every ~2 minutes (cf. WireGuard)?
     kill_timedout(c, userdata);
     do_tcp(c, userdata);
     send_crypto_packets(c);
