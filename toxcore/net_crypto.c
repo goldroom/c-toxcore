@@ -564,8 +564,6 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             */
         if (noise_handshake->initiator) {
             LOGGER_DEBUG(c->log, "Noise: INITIATOR");
-            /* Noise: create and set ephemeral private+public */
-            crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
             /* e */
             memcpy(packet + 1, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
@@ -651,8 +649,6 @@ static int create_crypto_handshake(const Net_Crypto *c, uint8_t *packet, const u
             */
         else {
             LOGGER_DEBUG(c->log, "Noise: RESPONDER");
-            /* Noise: create and set ephemeral private+public */
-            crypto_new_keypair(c->rng, noise_handshake->ephemeral_public, noise_handshake->ephemeral_private);
 
             /* e */
             memcpy(packet + 1, noise_handshake->ephemeral_public, CRYPTO_PUBLIC_KEY_SIZE);
@@ -783,7 +779,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
             // bytes2string(log_packet, sizeof(log_packet), packet, NOISE_HANDSHAKE_PACKET_LENGTH_INITIATOR, c->log);
             // LOGGER_DEBUG(c->log, "HS Packet I (R): %s", log_packet);
 
-            //TODO(goldroom): Check here if remote_ephemeral is already the same ephemeral key?
+            //TODO(goldroom): Check here if remote_ephemeral is already the same ephemeral key? => should not be possible to call it twice
 
             /* e */
             memcpy(noise_handshake->remote_ephemeral, packet + 1, CRYPTO_PUBLIC_KEY_SIZE);
@@ -845,7 +841,7 @@ static bool handle_crypto_handshake(const Net_Crypto *c, uint8_t recv_nonce[CRYP
                 return false;
             }
 
-            /* cookie necessary for Noise RESPONDER, used afterwards in create_send_handshake() */ 
+            /* Cookie necessary for Noise RESPONDER, used afterwards in create_send_handshake() */ 
             memcpy(peer_cookie, handshake_payload_plain + COOKIE_LENGTH, COOKIE_LENGTH);
             /* Noise: not necessary for Noise (=remote static), but necessary for friend_connection.c:handle_new_connections() */
             if (peer_id_public_key != nullptr) {
@@ -2049,9 +2045,8 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
 
     if (len <= (int)(sizeof(uint32_t) * 2)) {
         LOGGER_DEBUG(c->log, "decryption failure/crypt_connection_id: %d/conn->status: %d", crypt_connection_id, conn->status);
-        //TODO(goldroom): unwanted side effects? => yes, kills connection if new handshake before timeout
-        //TODO: maybe this was better? Connections now slower?
-        // connection_kill(c, crypt_connection_id, userdata);
+        //TODO(goldroom): unwanted side effects?
+        connection_kill(c, crypt_connection_id, userdata);
         return -1;
     }
 
@@ -2109,9 +2104,8 @@ static int handle_data_packet_core(Net_Crypto *c, int crypt_connection_id, const
         /* Noise: noise_handshake not necessary anymore => memzero and free */
         if (conn->noise_handshake != nullptr) {
             crypto_memzero(conn->noise_handshake, sizeof(Noise_Handshake));
-            //TODO: remove? leads to nullptr in handle_new_connection_handshake()?
-            // mem_delete(c->mem, conn->noise_handshake);
-            // conn->noise_handshake = nullptr;
+            /* mem_delete(c->mem, conn->noise_handshake)/conn->noise_handshake = nullptr: 
+                not possible here, memory possibly needed in handle_new_connection_handshake() */ 
         }
 
         /* also crypto_memzero() non-Noise values from crypto connection */ 
@@ -2293,8 +2287,9 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
     /* necessary for Noise RESPONDER and non-Noise */ 
     uint8_t cookie[COOKIE_LENGTH];
 
-    /* necessary for compatiblity to non-Noise */
-    //TODO: check for conn->noise_handshake_enabled => to not switch again after handle_new_connection_handshake()
+    /* necessary for compatiblity to non-Noise handshake; 
+        check for conn->noise_handshake_enabled necessary to not switch again after handle_new_connection_handshake() 
+        and create new crypto material. */
     if (length == HANDSHAKE_PACKET_LENGTH && c->noise_compatibility_enabled && conn->noise_handshake_enabled) {
         if (conn->noise_handshake != nullptr) {
             /* non-Noise: noise_handshake not necessary anymore => memzero and free */
@@ -2329,6 +2324,9 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                     return -1;
                 }
 
+                /* Noise: create and set ephemeral private+public */
+                crypto_new_keypair(c->rng, conn->noise_handshake->ephemeral_public, conn->noise_handshake->ephemeral_private);
+
                 /* Noise: peer_id_public_key (=conn->peer_id_public_key) not necessary for NoiseIK */
                 if (!handle_crypto_handshake(c, nullptr, nullptr, nullptr, dht_public_key, cookie,
                                              packet, length, nullptr, conn->noise_handshake)) {
@@ -2362,6 +2360,10 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 if (noise_handshake_init(conn->noise_handshake, c->self_id_secret_key, nullptr, false, nullptr, 0) != 0) {
                     return -1;
                 }
+                
+                /* Noise: create and set ephemeral private+public */
+                crypto_new_keypair(c->rng, conn->noise_handshake->ephemeral_public, conn->noise_handshake->ephemeral_private); 
+
                 /* Noise: peer_real_pk (=conn->public_key) not necessary here */
                 if (!handle_crypto_handshake(c, nullptr, nullptr, nullptr, dht_public_key, cookie,
                                              packet, length, nullptr, conn->noise_handshake)) {
@@ -2376,7 +2378,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             } else if (length == NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER) {
                 //TODO: Does this even happen?
                 LOGGER_DEBUG(c->log, "RESPONDER: NOISE_HANDSHAKE_PACKET_LENGTH_RESPONDER");
-                /* cannot chagne to INITIATOR here, connection broken */
+                /* cannot change to INITIATOR here, connection broken */
                 //TODO: leave here?
                 connection_kill(c, crypt_connection_id, userdata);
                 return -1;
@@ -2755,6 +2757,9 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
             return -1;
         }
 
+        /* Noise: create and set ephemeral private+public */
+        crypto_new_keypair(c->rng, n_c.noise_handshake->ephemeral_public, n_c.noise_handshake->ephemeral_private);
+
         //TODO: remove
         LOGGER_DEBUG(c->log, "Noise RESPONDER: After Handshake init");
 
@@ -2795,9 +2800,9 @@ static int handle_new_connection_handshake(Net_Crypto *c, const IP_Port *source,
 
     const int crypt_connection_id = getcryptconnection_id(c, n_c.peer_id_public_key);
 
-    //TODO: This is only called if new_crypto_connection() was already called in the meantime! Now Noise RESPONDER!
-    //TODO: why is this called twice in row via tcp_oob_callback() ?!
-    /* happens NoiseIK handshake (e.g. auto_tox_many_test) */ 
+    /* This is only called if a crypto_connection already exists (e.g. new_crypto_connection() was already called)! Now Noise RESPONDER! */ 
+    /* happens NoiseIK handshake (e.g. auto_tox_many_test) */
+    //TODO(goldroom): why is this called twice in row via tcp_oob_callback()?
     if (crypt_connection_id != -1) {
         LOGGER_DEBUG(c->log, "RESPONDER: CRYPTO CONN EXISTING -> crypt_connection_id: %d", crypt_connection_id);
         Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
@@ -3084,6 +3089,10 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
         wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
+
+    /* Noise: create and set ephemeral private+public */
+    crypto_new_keypair(c->rng, conn->noise_handshake->ephemeral_public, conn->noise_handshake->ephemeral_private);
+
 
     conn->cookie_request_number = random_u64(c->rng);
     uint8_t cookie_request[COOKIE_REQUEST_LENGTH];
