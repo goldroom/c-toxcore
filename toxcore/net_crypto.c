@@ -2123,11 +2123,17 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
 
     if (conn->noise_handshake != nullptr) {
         // TODO(goldroom): removed CRYPTO_CONN_NOT_CONFIRMED -> test for possible side effects
+        // TODO(goldroom): seems to break auto_reconnect_test in bazel-asan
+        // if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
+        //     && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
+        //     LOGGER_DEBUG(c->log, "NoiseIK: already handled handshake packet");
+        //     return -1;
+        // }
         if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
-            && conn->status != CRYPTO_CONN_HANDSHAKE_SENT) {
-            LOGGER_DEBUG(c->log, "NoiseIK: already handled handshake packet");
+            && conn->status != CRYPTO_CONN_HANDSHAKE_SENT
+            && conn->status != CRYPTO_CONN_NOT_CONFIRMED) {
             return -1;
-        }
+            }
     } else {
         if (conn->status != CRYPTO_CONN_COOKIE_REQUESTING
             && conn->status != CRYPTO_CONN_HANDSHAKE_SENT
@@ -2135,7 +2141,6 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             return -1;
         }
     }
-    
 
     /* necessary for Noise and non-Noise */ 
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE];
@@ -2249,7 +2254,6 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
             conn->status = CRYPTO_CONN_NOT_CONFIRMED;
             LOGGER_DEBUG(c->log, "conn->status: set to CRYPTO_CONN_NOT_CONFIRMED (%d)", conn->status);
             if (conn->noise_handshake->initiator) {
-
                 /* INITIATOR Noise Split(), nonces already set in crypto connection */
                 crypto_hkdf(conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
                 LOGGER_DEBUG(c->log, "INITIATOR: After Noise Split()");
@@ -2260,9 +2264,7 @@ static int handle_packet_crypto_hs(Net_Crypto *c, int crypt_connection_id, const
                 crypto_hkdf(conn->recv_key, CRYPTO_SYMMETRIC_KEY_SIZE, conn->send_key, CRYPTO_SYMMETRIC_KEY_SIZE, nullptr, 0, conn->noise_handshake->chaining_key);
                 LOGGER_DEBUG(c->log, "RESPONDER: After Noise Split()");
             }
-        }
-        /* Backwards compatibility: non-Noise handshake case */
-        else {
+        } else { /* Backwards compatibility: non-Noise handshake case */
             LOGGER_DEBUG(c->log, "non-Noise handshake");
             // if (conn->status == CRYPTO_CONN_COOKIE_REQUESTING) { // TODO(goldroom): doesn't work if Noise handshake packet was sent before
                 if (create_send_handshake(c, crypt_connection_id, cookie, dht_public_key) != 0) {
